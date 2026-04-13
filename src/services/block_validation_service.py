@@ -32,14 +32,23 @@ def _is_iso_8601_datetime(value: str) -> bool:
 
 
 class BlockValidationService:
-    def __init__(self, db_client: Any | None = None):
+    def __init__(self, db_client: Any | None = None, db_name: str | None = None):
         self.db = None
-        if db_client is not None:
-            self.db = db_client.blockchain_db
+        if db_client is not None and db_name is not None:
+            self.db = db_client[db_name]
 
-    def calculate_block_hash(self, block_data: BlockValidationRequest | dict[str, Any]) -> str:
+    def validate_block_integrity(self, block_data: BlockValidationRequest | dict[str, Any]) -> bool:
         normalized_block_data = self._normalize_block_data(block_data)
 
+        # Verifica estructura y consistencia del hash recalculado.
+        if not self._validate_block_structure_from_dict(normalized_block_data):
+            return False
+
+        computed_hash = self._calculate_block_hash_from_dict(normalized_block_data)
+        return computed_hash == normalized_block_data["hash"].lower()
+
+    @staticmethod
+    def _calculate_block_hash_from_dict(normalized_block_data: dict[str, Any]) -> str:
         # Construye una carga determinística excluyendo el hash actual.
         payload = {
             "index": normalized_block_data["index"],
@@ -55,12 +64,8 @@ class BlockValidationService:
         )
         return hashlib.sha256(normalized_payload.encode("utf-8")).hexdigest()
 
-    def validate_block_structure(self, block_data: BlockValidationRequest | dict[str, Any]) -> bool:
-        normalized_block_data = self._normalize_block_data(block_data)
-
-        if not isinstance(normalized_block_data, dict):
-            return False
-
+    @staticmethod
+    def _validate_block_structure_from_dict(normalized_block_data: dict[str, Any]) -> bool:
         # Verifica existencia y completitud de campos obligatorios.
         if not REQUIRED_BLOCK_FIELDS.issubset(normalized_block_data.keys()):
             return False
@@ -101,16 +106,6 @@ class BlockValidationService:
             return False
 
         return True
-
-    def validate_block_integrity(self, block_data: BlockValidationRequest | dict[str, Any]) -> bool:
-        normalized_block_data = self._normalize_block_data(block_data)
-
-        # Verifica estructura y consistencia del hash recalculado.
-        if not self.validate_block_structure(normalized_block_data):
-            return False
-
-        computed_hash = self.calculate_block_hash(normalized_block_data)
-        return computed_hash == normalized_block_data["hash"].lower()
 
     @staticmethod
     def _normalize_block_data(

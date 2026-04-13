@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -40,4 +40,42 @@ class BlockValidationRequest(BaseModel):
         ...,
         description="SHA-256 hash of the current block.",
         examples=["18f5fd2362deb9c68af6147334c6f66d2b816af67efea6460040b605d774aeb4"],
+    )
+
+
+class BlockValidationData(BaseModel):
+    valid: bool = Field(
+        ...,
+        description="Validation result for the provided block.",
+        examples=[True],
+    )
+
+
+class BlockValidationSuccessResponse(BaseModel):
+    status: Literal["ok"] = Field(
+        ...,
+        description="Request status.",
+        examples=["ok"],
+    )
+    data: BlockValidationData = Field(
+        ...,
+        description="Payload with block validation result.",
+    )
+
+
+class ApiErrorResponse(BaseModel):
+    status: Literal["error"] = Field(
+        ...,
+        description="Request status.",
+        examples=["error"],
+    )
+    code: str = Field(
+        ...,
+        description="Project-level error code.",
+        examples=["INVALID_BLOCK"],
+    )
+    message: str = Field(
+        ...,
+        description="Human-readable error message.",
+        examples=["Block structure or hash is invalid"],
     )
