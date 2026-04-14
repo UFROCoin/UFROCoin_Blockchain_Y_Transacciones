@@ -39,7 +39,7 @@ class BlockValidationRequest(BaseModel):
     hash: str = Field(
         ...,
         description="SHA-256 hash of the current block.",
-        examples=["18f5fd2362deb9c68af6147334c6f66d2b816af67efea6460040b605d774aeb4"],
+        examples=["680266db72abe3622b2feb7d1287c028ba3d9625b9c3c7d7763a703c6221ac0f"],
     )
 
 
