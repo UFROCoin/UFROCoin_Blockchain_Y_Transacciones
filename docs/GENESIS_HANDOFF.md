@@ -52,7 +52,7 @@ No se implemento ni se debe considerar parte de esta sesion:
 
 ## 3. Resumen de lo implementado
 
-Se creo una base funcional del modulo para soportar el bloque genesis. La implementacion esta desacoplada del futuro modelo `Block`; los bloques se manejan como `dict` con un contrato minimo esperado.
+Se creo una base funcional del modulo para soportar el bloque genesis. La implementacion ya usa el modelo `Block` para construir y persistir el bloque genesis, manteniendo compatibilidad con los documentos almacenados en MongoDB.
 
 ### Archivos creados o modificados
 
@@ -102,12 +102,15 @@ Funciones:
 
 - `serialize_block_for_hash(block_data)`
 - `calculate_block_hash(block_data)`
+- `serialize_block_fields_for_concatenation(block_data)`
+- `calculate_concatenated_block_hash(block_data)`
 
 Puntos importantes:
 
-- serializacion deterministica
-- `sort_keys=True`
-- `separators=(",", ":")`
+- para bloques generales, mantiene serializacion deterministica
+- para el bloque genesis, concatena `index`, `previous_hash`, `timestamp`, `transactions` y `nonce`
+- el hash del genesis se calcula con SHA-256 sobre esa concatenacion
+- la serializacion de `transactions` usa JSON consistente para evitar variaciones
 - excluye `_id` y `hash`
 - normaliza `datetime` a formato ISO UTC
 
@@ -193,7 +196,7 @@ Se uso `lifespan` para ejecutar la inicializacion del genesis al arrancar la apl
 
 ### Contrato minimo del bloque
 
-No existe aun `models/block.py`, asi que esta implementacion trabaja con `dict` y espera al menos:
+La implementacion usa `src/models/block.py` y el documento persistido espera al menos:
 
 ```json
 {
@@ -201,6 +204,7 @@ No existe aun `models/block.py`, asi que esta implementacion trabaja con `dict` 
   "previous_hash": "0000000000000000000000000000000000000000000000000000000000000000",
   "timestamp": "2026-04-09T12:00:00Z",
   "transactions": [],
+  "nonce": 0,
   "hash": "..."
 }
 ```
@@ -275,7 +279,8 @@ Cuando se ejecuta la app:
    - crea transaccion genesis
    - construye bloque genesis con `index = 0`
    - usa `previous_hash = "0" * 64`
-   - calcula hash SHA-256 deterministico
+   - concatena los campos del bloque genesis
+   - calcula hash SHA-256 sobre esa concatenacion
    - guarda el bloque en MongoDB
    - actualiza `chain_metadata`
    - intenta publicar `genesis.created`
@@ -364,7 +369,7 @@ python -m compileall src
 python -c "import src.main; print(src.main.app.title)"
 ```
 
-Ademas se verifico el hash deterministico con un bloque de prueba.
+Ademas se verifico el hash del genesis con la regla de concatenacion de campos y un bloque de prueba.
 
 ### Verificacion funcional manual recomendada
 
@@ -432,8 +437,8 @@ docker compose -f test/docker-compose.yml up -d
 - evitar recrear genesis si ya hay bloques
 - asegurar `index = 0`
 - asegurar `previous_hash = "0" * 64`
-- calcular hash SHA-256 de forma deterministica
-- excluir campos variables del hash
+- calcular hash SHA-256 por concatenacion de campos en el genesis
+- incluir la transaccion inicial de emision del sistema dentro del bloque genesis
 - persistir correctamente metadata
 - mantener alineado `last_block_hash` y `last_block_index` con el bloque guardado
 - intentar publicar `genesis.created` despues de persistir
@@ -473,7 +478,7 @@ Para mantener el alcance limpio, otro agente o desarrollador no deberia mezclar 
 - validacion de transacciones de usuario
 - clase `Block` si pertenece a otro integrante
 
-Si se implementa `Block` en el futuro, lo ideal es adaptar `GenesisService` y `BlockService` a ese contrato sin romper el flujo ya creado.
+Actualmente `GenesisService` y `BlockService` ya usan `Block`; cualquier cambio futuro deberia mantener estable el contrato persistido y la regla especial de hash del genesis.
 
 ---
 

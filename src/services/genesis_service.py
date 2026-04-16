@@ -19,7 +19,7 @@ from src.core.rabbitmq_publisher import publish_event
 from src.models.block import Block
 from src.models.chain_metadata import ChainMetadata
 from src.services.block_service import BlockService
-from src.utils.hash_utils import calculate_block_hash
+from src.utils.hash_utils import calculate_concatenated_block_hash
 
 LOGGER = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class GenesisService:
             transactions=[genesis_transaction],
             nonce=0,
         )
-        block.hash = calculate_block_hash(block.model_dump(exclude_none=True))
+        block.hash = calculate_concatenated_block_hash(block.model_dump(exclude_none=True))
         return block
 
     def _sync_metadata_from_existing_chain(self, last_block: dict[str, Any]) -> None:

@@ -4,7 +4,9 @@ import re
 from datetime import datetime
 from typing import Any
 
+from src.core.constants import GENESIS_BLOCK_INDEX, GENESIS_PREVIOUS_HASH
 from src.models.block import BlockValidationRequest
+from src.utils.hash_utils import calculate_concatenated_block_hash
 
 
 HEX_64_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -49,6 +51,9 @@ class BlockValidationService:
 
     @staticmethod
     def _calculate_block_hash_from_dict(normalized_block_data: dict[str, Any]) -> str:
+        if BlockValidationService._is_genesis_block(normalized_block_data):
+            return calculate_concatenated_block_hash(normalized_block_data)
+
         # Construye una carga determinística excluyendo el hash actual.
         payload = {
             "index": normalized_block_data["index"],
@@ -63,6 +68,13 @@ class BlockValidationService:
             separators=(",", ":"),
         )
         return hashlib.sha256(normalized_payload.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _is_genesis_block(normalized_block_data: dict[str, Any]) -> bool:
+        return (
+            normalized_block_data.get("index") == GENESIS_BLOCK_INDEX
+            and normalized_block_data.get("previous_hash") == GENESIS_PREVIOUS_HASH
+        )
 
     @staticmethod
     def _validate_block_structure_from_dict(normalized_block_data: dict[str, Any]) -> bool:
