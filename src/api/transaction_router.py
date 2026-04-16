@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from src.models.transaction import Transaction
 from src.services.transaction_service import TransactionService
-from src.core.database import db_client 
+from src.core.database import get_mongo_client
 
 # --- Configuración del Router ---
 
@@ -13,7 +13,7 @@ router = APIRouter(
 # --- Inyección de Dependencias ---
 
 def get_transaction_service():
-    return TransactionService(db_client)
+    return TransactionService(get_mongo_client())
 
 # --- Endpoints ---
 

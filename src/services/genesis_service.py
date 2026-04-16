@@ -15,7 +15,7 @@ from src.core.constants import (
     SYSTEM_REWARD,
 )
 from src.core.database import get_chain_metadata_collection
-from src.core.rabbitmq import publish_event
+from src.core.rabbitmq_publisher import publish_event
 from src.models.chain_metadata import ChainMetadata
 from src.services.block_service import BlockService
 from src.utils.hash_utils import calculate_block_hash

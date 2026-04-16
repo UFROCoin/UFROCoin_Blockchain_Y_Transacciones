@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.core.database import close_database, initialize_database
-from src.core.rabbitmq import close_rabbitmq_connection
+from src.core.rabbitmq_publisher import close_rabbitmq_connection
 from src.services.genesis_service import GenesisService
 
 LOGGER = logging.getLogger(__name__)
