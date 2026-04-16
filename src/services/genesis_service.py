@@ -16,6 +16,7 @@ from src.core.constants import (
 )
 from src.core.database import get_chain_metadata_collection
 from src.core.rabbitmq_publisher import publish_event
+from src.models.block import Block
 from src.models.chain_metadata import ChainMetadata
 from src.services.block_service import BlockService
 from src.utils.hash_utils import calculate_block_hash
@@ -48,6 +49,7 @@ class GenesisService:
 
         genesis_transaction = self.build_genesis_transaction()
         genesis_block = self.build_genesis_block(genesis_transaction)
+        genesis_block_document = genesis_block.model_dump(exclude_none=True)
 
         try:
             self.block_service.create_genesis_block(genesis_block)
@@ -57,10 +59,12 @@ class GenesisService:
             LOGGER.warning("Genesis block ya existe; omitiendo recreacion")
             return None
 
+        genesis_block_hash = genesis_block_document["hash"]
+
         metadata_model = ChainMetadata(
             genesis_created=True,
-            last_block_index=genesis_block["index"],
-            last_block_hash=genesis_block["hash"],
+            last_block_index=genesis_block.index,
+            last_block_hash=genesis_block_hash,
             total_blocks=1,
         )
         self.chain_metadata_collection.update_one(
@@ -69,13 +73,13 @@ class GenesisService:
             upsert=True,
         )
 
-        event_payload = self._build_genesis_created_event(genesis_block)
+        event_payload = self._build_genesis_created_event(genesis_block_document)
         try:
             publish_event(GENESIS_EVENT_ROUTING_KEY, event_payload)
         except Exception as exc:  # noqa: BLE001
             LOGGER.warning("No se pudo publicar genesis.created: %s", exc)
 
-        return genesis_block
+        return genesis_block_document
 
     def build_genesis_transaction(self) -> dict[str, Any]:
         timestamp = self._utc_now_iso()
@@ -91,16 +95,17 @@ class GenesisService:
             },
         }
 
-    def build_genesis_block(self, genesis_transaction: dict[str, Any]) -> dict[str, Any]:
+    def build_genesis_block(self, genesis_transaction: dict[str, Any]) -> Block:
         timestamp = self._utc_now_iso()
-        block_data = {
-            "index": GENESIS_BLOCK_INDEX,
-            "previous_hash": GENESIS_PREVIOUS_HASH,
-            "timestamp": timestamp,
-            "transactions": [genesis_transaction],
-        }
-        block_data["hash"] = calculate_block_hash(block_data)
-        return block_data
+        block = Block(
+            index=GENESIS_BLOCK_INDEX,
+            previous_hash=GENESIS_PREVIOUS_HASH,
+            timestamp=timestamp,
+            transactions=[genesis_transaction],
+            nonce=0,
+        )
+        block.hash = calculate_block_hash(block.model_dump(exclude_none=True))
+        return block
 
     def _sync_metadata_from_existing_chain(self, last_block: dict[str, Any]) -> None:
         total_blocks = self.block_service.blocks_collection.count_documents({})
