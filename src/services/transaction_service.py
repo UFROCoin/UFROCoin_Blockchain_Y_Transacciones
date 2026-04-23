@@ -11,14 +11,14 @@ class TransactionService:
     def __init__(self, db_client):
         self.db = db_client.blockchain_db
         self.publisher = RabbitMQPublisher()
-        self.wallet_service = ExternalWalletService
+        self.wallet_service = ExternalWalletService()
     
     # --- Validaciones ---
 
     def calculate_balance(self, address: str) -> float:
         balance = 0.0
 
-        block = self.db.blocks.find()
+        blocks = self.db.blocks.find()
         for block in blocks:
             for tx in block.get("transactions", []):
                 if tx.get("to") == address:

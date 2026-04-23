@@ -11,7 +11,7 @@ class ExternalWalletService:
         self.base_url = base_url
 
     def check_wallet_exist(self, address: str) -> bool:
-        if not address or address.startwith("invalid"):
+        if not address or address.startswith("invalid"):
             return False
         
         return True
