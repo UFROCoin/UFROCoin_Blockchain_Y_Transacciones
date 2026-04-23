@@ -27,3 +27,5 @@ async def create_transaction(
         return new_tx
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
