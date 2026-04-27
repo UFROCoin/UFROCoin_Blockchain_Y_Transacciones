@@ -2,22 +2,16 @@ from fastapi import FastAPI
 from src.api.block_router import router as block_router
 from src.api.global_router import router as global_router
 from src.api.transaction_router import router as transaction_router
-from src.core.database import close_db_client
+from src.api.startup import lifespan
 
 app = FastAPI(
     title="UFROCoin Module 2 API",
     description="Blockchain and transactions service for UFROCoin.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.include_router(global_router)
 app.include_router(block_router, prefix="/api")
 app.include_router(transaction_router, prefix="/api")
 
-
-@app.on_event("shutdown")
-def shutdown_event() -> None:
-    close_db_client()
-
-
-    
