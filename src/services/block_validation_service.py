@@ -2,6 +2,7 @@ import hashlib
 import json
 import re
 from datetime import datetime
+from importlib import import_module
 from typing import Any
 
 from src.core.constants import GENESIS_BLOCK_INDEX, GENESIS_PREVIOUS_HASH
@@ -48,6 +49,61 @@ class BlockValidationService:
 
         computed_hash = self._calculate_block_hash_from_dict(normalized_block_data)
         return computed_hash == normalized_block_data["hash"].lower()
+
+    def validate_chain_integrity(self) -> dict[str, Any]:
+        """
+        Recorre la blockchain completa de principio a fin (index ASC) y verifica
+        que el hash almacenado de cada bloque coincida con el hash recalculado
+        en tiempo real usando los datos crudos del bloque.
+
+        Esta operación es estrictamente read-only: no modifica ningún documento.
+
+        Retorna un dict con:
+            - chain_valid (bool): True si todos los bloques son íntegros.
+            - total_blocks (int): Cantidad de bloques evaluados.
+            - blocks (list[dict]): Detalle por bloque con index, stored_hash,
+              computed_hash y valid.
+        """
+        if self.db is None:
+            raise RuntimeError(
+                "validate_chain_integrity requires a database connection. "
+                "Instantiate BlockValidationService with db_client and db_name."
+            )
+
+        try:
+            pymongo = import_module("pymongo")
+        except ImportError as exc:
+            raise RuntimeError("pymongo is required to validate the chain") from exc
+
+        blocks_cursor = (
+            self.db["blocks"]
+            .find({}, {"_id": 0})
+            .sort("index", pymongo.ASCENDING)
+        )
+
+        results: list[dict[str, Any]] = []
+        chain_valid = True
+
+        for raw_block in blocks_cursor:
+            stored_hash: str = raw_block.get("hash", "")
+            computed_hash: str = self._calculate_block_hash_from_dict(raw_block)
+            block_valid: bool = stored_hash.lower() == computed_hash.lower()
+
+            if not block_valid:
+                chain_valid = False
+
+            results.append({
+                "index": raw_block.get("index"),
+                "stored_hash": stored_hash,
+                "computed_hash": computed_hash,
+                "valid": block_valid,
+            })
+
+        return {
+            "chain_valid": chain_valid,
+            "total_blocks": len(results),
+            "blocks": results,
+        }
 
     @staticmethod
     def _calculate_block_hash_from_dict(normalized_block_data: dict[str, Any]) -> str:
