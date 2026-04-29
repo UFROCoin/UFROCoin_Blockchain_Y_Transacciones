@@ -5,10 +5,13 @@ from src.core.database import get_database_name, get_db_client
 from src.models.block import (
     ApiErrorResponse,
     BlockData,
+    BlockIntegrityResult,
     BlockValidationData,
     BlockValidationRequest,
     BlockValidationSuccessResponse,
     ChainSuccessResponse,
+    ChainValidationData,
+    ChainValidationSuccessResponse,
     TransactionResponseData,
 )
 from src.services.block_service import BlockService
@@ -114,3 +117,55 @@ async def get_chain(
         data=blocks,
         error=None,
     ).model_dump(by_alias=True)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/chain/validate — Validación de integridad de la cadena completa
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/chain/validate",
+    response_model=ChainValidationSuccessResponse,
+    summary="Validar la integridad de la cadena de bloques completa",
+    description=(
+        "Recorre todos los bloques de la blockchain de principio a fin (index ASC), "
+        "recalcula el hash SHA-256 de cada uno con los datos crudos almacenados y lo "
+        "compara con el hash guardado. "
+        "La operación es estrictamente read-only: no modifica ningún documento."
+    ),
+    responses={
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "model": ApiErrorResponse,
+            "description": "Error interno al acceder a la base de datos",
+        }
+    },
+)
+async def validate_chain(
+    validation_service: BlockValidationService = Depends(get_block_validation_service),
+):
+    result = validation_service.validate_chain_integrity()
+
+    block_results = [
+        BlockIntegrityResult(
+            index=b["index"],
+            stored_hash=b["stored_hash"],
+            computed_hash=b["computed_hash"],
+            valid=b["valid"],
+        )
+        for b in result["blocks"]
+    ]
+
+    chain_valid: bool = result["chain_valid"]
+    message = "Chain integrity verified successfully" if chain_valid else "Chain integrity compromised"
+
+    return ChainValidationSuccessResponse(
+        success=True,
+        message=message,
+        data=ChainValidationData(
+            chain_valid=chain_valid,
+            total_blocks=result["total_blocks"],
+            blocks=block_results,
+        ),
+        error=None,
+    ).model_dump()
