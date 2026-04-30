@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -113,4 +114,97 @@ class ApiErrorResponse(BaseModel):
         ...,
         description="Human-readable error message.",
         examples=["Block structure or hash is invalid"],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Modelos para GET /api/chain (US-10)
+# ---------------------------------------------------------------------------
+
+
+class ChainTransactionType(str, Enum):
+    """Tipos de transacción persistidos en MongoDB."""
+
+    TRANSFER = "TRANSFER"
+    GENESIS = "GENESIS"
+    MINING_REWARD = "MINING_REWARD"
+
+
+class ChainTransactionStatus(str, Enum):
+    PENDING = "PENDING"
+    CONFIRMED = "CONFIRMED"
+
+
+class TransactionResponseData(BaseModel):
+    """Transacción serializada dentro de un bloque de la cadena."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    id: str = Field(..., description="Identificador único de la transacción.")
+    type: ChainTransactionType = Field(..., description="Tipo de transacción.")
+    from_address: str = Field(
+        ...,
+        alias="from",
+        description="Dirección de origen.",
+    )
+    to_address: str = Field(
+        ...,
+        alias="to",
+        description="Dirección de destino.",
+    )
+    amount: float = Field(..., description="Monto transferido.")
+    timestamp: str = Field(..., description="Fecha-hora ISO 8601 de la transacción.")
+    status: ChainTransactionStatus = Field(..., description="Estado de la transacción.")
+    block_index: int | None = Field(
+        default=None,
+        ge=0,
+        description="Índice del bloque que contiene esta transacción.",
+    )
+
+
+class BlockData(BaseModel):
+    """Bloque serializable para respuesta pública de la cadena."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    index: int = Field(..., ge=0, description="Posición del bloque en la cadena.")
+    timestamp: str = Field(..., description="Fecha-hora ISO 8601 de creación del bloque.")
+    transactions: list[dict[str, Any]] = Field(
+        ...,
+        description=(
+            "Transacciones incluidas en el bloque. "
+            "La estructura varía según el tipo (GENESIS_ISSUANCE, TRANSFER, MINING_REWARD)."
+        ),
+    )
+    previous_hash: str = Field(
+        ...,
+        pattern=r"^[a-f0-9]{64}$",
+        description="Hash SHA-256 del bloque anterior.",
+    )
+    nonce: int = Field(..., ge=0, description="Nonce del Proof of Work.")
+    hash: str = Field(
+        ...,
+        pattern=r"^[a-f0-9]{64}$",
+        description="Hash SHA-256 del bloque actual.",
+    )
+
+
+class ApiErrorDetail(BaseModel):
+    """Detalle de error incluido en la respuesta estándar."""
+
+    code: str = Field(..., description="Código de error del proyecto.")
+    details: str = Field(..., description="Descripción legible del error.")
+
+
+class ChainSuccessResponse(BaseModel):
+    """Respuesta estándar del endpoint GET /api/chain."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = Field(..., description="Indica si la operación fue exitosa.")
+    message: str = Field(..., description="Mensaje descriptivo del resultado.")
+    data: list[BlockData] = Field(..., description="Lista de bloques en orden cronológico.")
+    error: ApiErrorDetail | None = Field(
+        default=None,
+        description="Detalle de error, null en respuestas exitosas.",
     )
