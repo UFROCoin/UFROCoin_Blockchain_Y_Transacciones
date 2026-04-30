@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.core.security import verify_wallet_owner
 from src.services.history_service import get_wallet_history
 
-# --- Configuracion del Router ---
+# --- Configuración del Router ---
 
 router = APIRouter(prefix="/history", tags=["history"])
 
@@ -10,8 +10,9 @@ router = APIRouter(prefix="/history", tags=["history"])
 
 @router.get(
     "/{address}",
+    response_model=list[dict],
     summary="Obtener historial de movimientos",
-    description="Retorna el listado cronológico de transacciones asociadas a una wallet. Incluye transacciones confirmadas (en la blockchain) y pendientes (en el mempool). Requiere que el token JWT pertenezca al dueño de la wallet consultada."
+    description="Retorna el listado cronológico de transacciones asociadas a una wallet. Incluye transacciones confirmadas y pendientes."
 )
 def get_history(address: str, verified_address: str = Depends(verify_wallet_owner)):
     try:
