@@ -5,7 +5,7 @@ from jose import jwt, JWTError
 
 # --- Configuracion de Seguridad ---
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 SECRET_KEY = os.getenv("JWT_SECRET", "ufrocoin-secret-cambiar-en-produccion")
 ALGORITHM = "HS256"
