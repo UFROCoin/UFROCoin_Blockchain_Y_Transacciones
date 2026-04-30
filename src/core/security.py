@@ -1,18 +1,18 @@
 import os
-from fastapi import HTTPException, Security, status
+from fastapi import HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 
 # --- Configuracion de Seguridad ---
 
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer()
 
 SECRET_KEY = os.getenv("JWT_SECRET", "ufrocoin-secret-cambiar-en-produccion")
 ALGORITHM = "HS256"
 
 # --- Validacion de Propiedad ---
 
-def verify_wallet_owner(address: str, auth: HTTPAuthorizationCredentials = Security(security)):
+def verify_wallet_owner(address: str, auth: HTTPAuthorizationCredentials = Depends(security)):
     if not auth:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

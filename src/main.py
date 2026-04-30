@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from src.api.block_router import router as block_router
 from src.api.global_router import router as global_router
 from src.api.transaction_router import router as transaction_router
+from src.api.history_router import router as history_router
 from src.core.database import close_db_client
 
 app = FastAPI(
@@ -13,6 +14,7 @@ app = FastAPI(
 app.include_router(global_router)
 app.include_router(block_router, prefix="/api")
 app.include_router(transaction_router, prefix="/api")
+app.include_router(history_router)
 
 
 @app.on_event("shutdown")
