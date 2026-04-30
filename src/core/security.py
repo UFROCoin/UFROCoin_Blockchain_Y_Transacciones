@@ -3,20 +3,25 @@ from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 
-security = HTTPBearer()
+# --- Configuracion de Seguridad ---
+
+security = HTTPBearer(auto_error=False)
 
 SECRET_KEY = os.getenv("JWT_SECRET", "ufrocoin-secret-cambiar-en-produccion")
 ALGORITHM = "HS256"
 
-# --- Validacion de Propiedad --- 
+# --- Validacion de Propiedad ---
 
 def verify_wallet_owner(address: str, auth: HTTPAuthorizationCredentials = Security(security)):
+    if not auth:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Falta el token de autorización. Usa el botón 'Authorize' en Swagger para ingresar tu JWT o 'test-token'."
+        )
+
     if auth.credentials == "test-token":
         return address
-    
-    """
-    Dependencia para validar que el token JWT pertenece al dueño de la wallet solicitada.
-    """
+
     try:
         payload = jwt.decode(auth.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         
@@ -25,7 +30,7 @@ def verify_wallet_owner(address: str, auth: HTTPAuthorizationCredentials = Secur
         if not token_address or token_address != address:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tienes permiso para acceder al historial de esta wallet"
+                detail="No tienes permiso para ver el historial de esta wallet"
             )
             
         return token_address
