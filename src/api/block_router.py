@@ -1,13 +1,17 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 
 from src.core.database import get_database_name, get_db_client
 from src.models.block import (
     ApiErrorResponse,
+    BlockData,
     BlockValidationData,
     BlockValidationRequest,
     BlockValidationSuccessResponse,
+    ChainSuccessResponse,
+    TransactionResponseData,
 )
+from src.services.block_service import BlockService
 from src.services.block_validation_service import BlockValidationService
 
 router = APIRouter(tags=["Blockchain"])
@@ -63,3 +67,50 @@ async def validate_block(
         data=BlockValidationData(valid=True),
     )
     return response.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# GET /api/chain — Consultar la cadena de bloques completa (US-10)
+# ---------------------------------------------------------------------------
+
+
+def get_block_service() -> BlockService:
+    """Inyecta BlockService sin dependencia de DB explícita (usa get_blocks_collection interno)."""
+    return BlockService()
+
+
+@router.get(
+    "/chain",
+    response_model=ChainSuccessResponse,
+    summary="Consultar la cadena de bloques completa",
+    description=(
+        "Retorna todos los bloques en orden cronológico (index ASC). "
+        "No requiere autenticación — la blockchain es pública. "
+        "Soporta paginación opcional con los query params page y limit."
+    ),
+)
+async def get_chain(
+    page: int = Query(default=1, ge=1, description="Página opcional para paginación"),
+    limit: int = Query(default=10, ge=1, description="Cantidad de bloques por página"),
+    block_service: BlockService = Depends(get_block_service),
+):
+    blocks_raw, _total = block_service.get_chain(page=page, limit=limit)
+
+    blocks = [
+        BlockData(
+            index=b["index"],
+            timestamp=b["timestamp"],
+            transactions=b.get("transactions", []),
+            previous_hash=b["previous_hash"],
+            nonce=b["nonce"],
+            hash=b["hash"],
+        )
+        for b in blocks_raw
+    ]
+
+    return ChainSuccessResponse(
+        success=True,
+        message="Blockchain retrieved successfully",
+        data=blocks,
+        error=None,
+    ).model_dump(by_alias=True)
