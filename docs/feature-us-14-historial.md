@@ -1,48 +1,47 @@
-# Documentación Técnica: Historial de Transacciones (US-14)
+# Documentación Técnica: US-14 Historial de Transacciones
 
-## 1. Resumen de la Funcionalidad
-Esta feature permite a los usuarios obtener un listado cronológico de todas sus transacciones. El sistema consulta dos fuentes de datos para asegurar integridad:
-- **Confirmadas:** Transacciones persistidas en la colección `blocks`.
-- **Pendientes:** Transacciones en el mempool (colección `transacciones`).
+## Contexto
+Esta funcionalidad permite obtener una visión consolidada y cronológica de todas las operaciones asociadas a una wallet. El sistema unifica las transacciones que aún residen en el mempool (pendientes) con aquellas ya integradas en la cadena de bloques (confirmadas)[cite: 3].
 
-## 2. Especificación del API
-- **Ruta:** `GET /history/{address}`
-- **Método:** `GET`
-- **Seguridad:** `HTTPBearer` (JWT)
+## Arquitectura
 
-### Parámetros de Ruta
-- `address`: La dirección pública de la wallet cuyo historial se desea consultar.
+1. **API Router (`src/api/history_router.py`)**: 
+   Expone el endpoint `GET /history/{address}`. Utiliza la inyección de dependencias `verify_wallet_owner` para garantizar que solo el dueño de la llave o un administrador con token de desarrollo pueda acceder a los datos[cite: 3]. Define el `response_model=list[dict]` para asegurar una documentación precisa en Swagger.
 
-## 3. Lógica de Transformación de Datos
-Para facilitar la lectura en el Frontend, el servicio transforma el tipo genérico `TRANSFER` en etiquetas dinámicas:
-- **SEND:** Se asigna si la wallet consultada es la emisora (`from`).
-- **RECEIVE:** Se asigna si la wallet consultada es la receptora (`to`).
-- **Estados:** Los registros se marcan como `CONFIRMED` o `PENDING` según su origen.
+2. **Capa de Servicios (`src/services/history_service.py`)**:
+   Orquesta la recuperación de datos desde MongoDB. Realiza dos consultas paralelas:
+   - **Mempool**: Busca en la colección `transacciones` donde el campo `from` o `to` coincida con la dirección[cite: 2, 3].
+   - **Blockchain**: Busca en la colección `blocks` transacciones internas que involucren a la dirección[cite: 3].
+   Realiza la conversión de `ObjectId` a `string` para evitar errores de serialización JSON y ordena los resultados por `timestamp` de forma descendente.
 
-## 4. Pruebas en Entorno de Desarrollo (Swagger Bypass)
-Para facilitar las pruebas sin necesidad de un JWT real generado por el Módulo 1, se ha implementado un bypass de seguridad:
+3. **Base de Datos**:
+   Se utiliza la base de datos `blockchain_db`[cite: 2]. Las colecciones involucradas son `transacciones` para el estado actual de envíos y `blocks` para el histórico inmutable[cite: 2, 3].
 
-### Pasos para probar en Swagger:
-1. Accede a `http://localhost:8000/docs`.
-2. Haz clic en el botón **"Authorize"** (el candado arriba a la derecha).
-3. En el campo "Value", escribe exactamente: `test-token`
-4. Haz clic en **"Authorize"** y luego en **"Close"**.
-5. Ve al endpoint `GET /history/{address}`, presiona **"Try it out"**.
-6. Ingresa la dirección de la wallet que desees consultar y presiona **"Execute"**.
+## Guía de Pruebas (Swagger UI)
 
-> **Nota:** El sistema detectará el `test-token` y te permitirá ver los datos de la wallet ingresada como si fueras el dueño legítimo.
+1. Acceder a `http://localhost:8000/docs`.
+2. Autorizar la sesión usando el botón "Authorize" con el valor `Bearer test-token` (bypass de desarrollo)[cite: 3].
+3. **Consulta de Wallet con Actividad**:
+   - Introducir una dirección con registros conocidos (ej: `billetera_con_fondos`)[cite: 2].
+   - *Resultado esperado*: Código `200 OK` con un arreglo de objetos que incluyen el campo `"status": "PENDING"` o `"status": "CONFIRMED"`.
+4. **Consulta de Wallet Nueva**:
+   - Introducir una dirección sin transacciones.
+   - *Resultado esperado*: Código `200 OK` con un arreglo vacío `[]`.
+5. **Validación de Seguridad**:
+   - Intentar la consulta sin el header de autorización o con un token inválido.
+   - *Resultado esperado*: Código `401 Unauthorized`.
 
-## 5. Modelos de Respuesta (JSON)
-El endpoint devuelve una lista de objetos con la siguiente estructura:
+## Estructura de Respuesta (Contrato)
 ```json
 [
   {
-    "_id": "string",
-    "type": "SEND | RECEIVE",
-    "from": "string",
-    "to": "string",
-    "amount": 0.0,
-    "timestamp": "ISO-8601 String",
-    "status": "CONFIRMED | PENDING"
+    "_id": "69ea6c9d27b89d2fccca7372",
+    "from": "billetera_con_fondos",
+    "to": "billetera_valida_456",
+    "amount": 10,
+    "type": "TRANSFER",
+    "status": "PENDING",
+    "timestamp": "2026-04-23T12:00:00Z",
+    "block_index": null
   }
 ]
