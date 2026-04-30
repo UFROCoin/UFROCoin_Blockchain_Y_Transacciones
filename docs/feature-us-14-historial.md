@@ -1,47 +1,65 @@
 # Documentación Técnica: US-14 Historial de Transacciones
 
-## Contexto
-Esta funcionalidad permite obtener una visión consolidada y cronológica de todas las operaciones asociadas a una wallet. El sistema unifica las transacciones que aún residen en el mempool (pendientes) con aquellas ya integradas en la cadena de bloques (confirmadas)[cite: 3].
+## 1. Objetivo de este documento
+Este archivo resume la implementación de la **US-14: Historial de Transacciones**, la cual permite a los usuarios obtener una visión cronológica y paginada de sus movimientos, consolidando datos del mempool y la cadena de bloques.
 
-## Arquitectura
+---
 
-1. **API Router (`src/api/history_router.py`)**: 
-   Expone el endpoint `GET /history/{address}`. Utiliza la inyección de dependencias `verify_wallet_owner` para garantizar que solo el dueño de la llave o un administrador con token de desarrollo pueda acceder a los datos[cite: 3]. Define el `response_model=list[dict]` para asegurar una documentación precisa en Swagger.
+## 2. Contexto Funcional y Alcance
+Se implementó un servicio unificado que recupera transacciones asociadas a una wallet (ya sea como emisor o receptor) desde el Módulo 2 de UFROCoin.
 
-2. **Capa de Servicios (`src/services/history_service.py`)**:
-   Orquesta la recuperación de datos desde MongoDB. Realiza dos consultas paralelas:
-   - **Mempool**: Busca en la colección `transacciones` donde el campo `from` o `to` coincida con la dirección[cite: 2, 3].
-   - **Blockchain**: Busca en la colección `blocks` transacciones internas que involucren a la dirección[cite: 3].
-   Realiza la conversión de `ObjectId` a `string` para evitar errores de serialización JSON y ordena los resultados por `timestamp` de forma descendente.
+### Alcance Implementado
+- **Consulta Unificada**: Recuperación de transacciones desde la colección `transacciones` (pendientes) y `blocks` (confirmadas).
+- **Paginación**: Soporte para parámetros `page` y `limit` para optimizar el consumo del cliente.
+- **Seguridad**: Validación de propiedad de la wallet mediante JWT con bypass de desarrollo (`test-token`).
+- **Ordenamiento**: Entrega cronológica descendente (más reciente primero).
+- **Integración MongoDB**: Conexión directa a la base de datos `blockchain_db`.
 
-3. **Base de Datos**:
-   Se utiliza la base de datos `blockchain_db`[cite: 2]. Las colecciones involucradas son `transacciones` para el estado actual de envíos y `blocks` para el histórico inmutable[cite: 2, 3].
+### Fuera de Alcance
+- Filtros avanzados por fecha o tipo de transacción (se considerarán para futuras versiones).
+- Exportación a formatos externos (PDF/CSV).
 
-## Guía de Pruebas (Swagger UI)
+---
 
-1. Acceder a `http://localhost:8000/docs`.
-2. Autorizar la sesión usando el botón "Authorize" con el valor `Bearer test-token` (bypass de desarrollo)[cite: 3].
-3. **Consulta de Wallet con Actividad**:
-   - Introducir una dirección con registros conocidos (ej: `billetera_con_fondos`)[cite: 2].
-   - *Resultado esperado*: Código `200 OK` con un arreglo de objetos que incluyen el campo `"status": "PENDING"` o `"status": "CONFIRMED"`.
-4. **Consulta de Wallet Nueva**:
-   - Introducir una dirección sin transacciones.
-   - *Resultado esperado*: Código `200 OK` con un arreglo vacío `[]`.
-5. **Validación de Seguridad**:
-   - Intentar la consulta sin el header de autorización o con un token inválido.
-   - *Resultado esperado*: Código `401 Unauthorized`.
+## 3. Arquitectura y Archivos Tocados
 
-## Estructura de Respuesta (Contrato)
-```json
-[
-  {
-    "_id": "69ea6c9d27b89d2fccca7372",
-    "from": "billetera_con_fondos",
-    "to": "billetera_valida_456",
-    "amount": 10,
-    "type": "TRANSFER",
-    "status": "PENDING",
-    "timestamp": "2026-04-23T12:00:00Z",
-    "block_index": null
-  }
-]
+- `src/core/security.py`: Se añadió el bypass para `test-token` en `verify_wallet_owner`.
+- `src/services/history_service.py`: Lógica central de filtrado, ordenamiento y paginación.
+- `src/api/history_router.py`: Definición del endpoint y documentación OpenAPI.
+- `src/main.py`: Registro del nuevo enrutador en la aplicación FastAPI.
+
+---
+
+## 4. Especificaciones Técnicas
+
+### Endpoint: `GET /history/{address}`
+- **Parámetros de Query**:
+    - `page` (int, default=1): Número de página.
+    - `limit` (int, default=10, max=100): Cantidad de registros.
+- **Respuesta Exitosa (200 OK)**:
+    ```json
+    [
+      {
+        "_id": "69ea6c9d27b89d2fccca7372",
+        "from": "billetera_con_fondos",
+        "to": "billetera_valida_456",
+        "amount": 10,
+        "type": "TRANSFER",
+        "status": "PENDING",
+        "timestamp": "2026-04-23T12:00:00Z",
+        "block_index": null
+      }
+    ]
+    ```
+
+### Lógica de Paginación
+La paginación se aplica sobre el conjunto total de resultados (Mempool + Blockchain) después de realizar el ordenamiento:
+`resultado = lista_total[skip : skip + limit]` donde `skip = (page - 1) * limit`.
+
+---
+
+## 5. Guía de Verificación (Swagger)
+1. Abrir `http://localhost:8000/docs`.
+2. Autorizar con `test-token`.
+3. Ejecutar `GET /history/billetera_con_fondos?page=1&limit=5`.
+4. Verificar que se retornan los registros de la base de datos `blockchain_db`.

@@ -2,11 +2,12 @@ from src.core.database import get_db_client
 
 # --- Logica de Historial ---
 
-def get_wallet_history(address: str) -> list[dict]:
+def get_wallet_history(address: str, page: int = 1, limit: int = 10) -> list[dict]:
     client = get_db_client()
     db = client.get_database("blockchain_db")
     
     history = []
+    skip = (page - 1) * limit
     
     query = {"$or": [{"from": address}, {"to": address}]}
     
@@ -38,4 +39,4 @@ def get_wallet_history(address: str) -> list[dict]:
                 
     history.sort(key=lambda item: item.get("timestamp", ""), reverse=True)
     
-    return history
+    return history[skip : skip + limit]
