@@ -1,18 +1,106 @@
+# =============================================================================
+# TEMPLATE CI — UFROCoin
+# Copiar este archivo a .github/workflows/ci.yml en cada repo de servicio
+# y reemplazar los valores marcados con <REEMPLAZAR>
+# =============================================================================
+
 name: CI
 
 on:
   push:
     branches:
-      - "**"
-  pull_request:
+      - main
 
 jobs:
-  smoke:
-    name: Basic check
+  ci:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    permissions:
+      contents: read
+      packages: write
 
-      - name: Placeholder step
-        run: echo "CI pipeline configurado"
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------
+      # 1. Steps que consideren necesarios
+      # Reemplazar con los comandos propios del servicio
+      # -----------------------------------------------------------------
+      - name: Linting y tests
+        run: |
+          # <REEMPLAZAR> ejemplo para Python/FastAPI:
+          # pip install -r requirements.txt
+          # ruff check .
+          # pytest
+
+      # -----------------------------------------------------------------
+      # 2. Login a GHCR
+      # -----------------------------------------------------------------
+      - name: Login a GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------------------------------------------------
+      # 3. Build y push de la imagen
+      # -----------------------------------------------------------------
+      - name: Convertir nombre del repositorio a minúsculas
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
+      - name: Build y push de imagen
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ env.REPO_NAME }}:${{ github.sha }}
+            ghcr.io/${{ env.REPO_NAME }}:latest
+
+      # -----------------------------------------------------------------
+      # 4. Generar token efímero desde GitHub App
+      # Requiere dos secrets en este repo:
+      #   - GH_APP_ID: App ID numérico de la GitHub App ufrocoin-cd-dispatcher
+      #   - GH_APP_PRIVATE_KEY: contenido completo del archivo .pem
+      # Estos secrets los distribuye el equipo de infra
+      # -----------------------------------------------------------------
+      - name: Generar token desde GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          repositories: ufrocoin_infra
+
+      # -----------------------------------------------------------------
+      # 5. Dispatch al repo de infraestructura
+      # Reemplazar:
+      #   - event-type: <REEMPLAZAR-EVENTO-DEPLOY>
+      #       Opciones válidas: deploy-users
+      #                         deploy-blockchain
+      #                         deploy-miner
+      #                         deploy-ui
+      #   - service_name: <REEMPLAZAR-NOMBRE-SERVICIO>
+      #       Opciones válidas: api-users
+      #                         api-blockchain
+      #                         api-miner
+      #                         ui
+      #       Estos nombres deben coincidir con los nombres de servicio en docker-compose.yml.
+      #   - env_var: <REEMPLAZAR-VAR-TAG> (variable de entorno del tag en docker-compose.yml)
+      #       Opciones válidas: USERS_TAG
+      #                         BLOCKCHAIN_TAG
+      #                         MINER_TAG
+      #                         UI_TAG
+      # -----------------------------------------------------------------
+      - name: Dispatch al repo de infraestructura
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          repository: ufrocoin/ufrocoin_infra
+          event-type: deploy-blockchain # Ejemplo: deploy-users
+          client-payload: |
+            {
+              "service_name": "api-blockchain",
+              "env_var": "BLOCKCHAIN_TAG",
+              "image_tag": "${{ github.sha }}"
+            }
