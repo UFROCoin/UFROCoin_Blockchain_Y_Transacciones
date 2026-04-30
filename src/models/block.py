@@ -208,3 +208,49 @@ class ChainSuccessResponse(BaseModel):
         default=None,
         description="Detalle de error, null en respuestas exitosas.",
     )
+
+
+# ---------------------------------------------------------------------------
+# Modelos para GET /api/chain/validate (US — validación de integridad)
+# ---------------------------------------------------------------------------
+
+
+class BlockIntegrityResult(BaseModel):
+    """Resultado de integridad para un bloque individual."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    index: int = Field(..., description="Posición del bloque en la cadena.")
+    stored_hash: str = Field(..., description="Hash SHA-256 almacenado en la base de datos.")
+    computed_hash: str = Field(..., description="Hash SHA-256 recalculado en tiempo real.")
+    valid: bool = Field(..., description="True si stored_hash == computed_hash.")
+
+
+class ChainValidationData(BaseModel):
+    """Payload de la respuesta de validación de la cadena completa."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    chain_valid: bool = Field(
+        ...,
+        description="True si todos los bloques superaron la validación de integridad.",
+    )
+    total_blocks: int = Field(..., description="Cantidad total de bloques evaluados.")
+    blocks: list[BlockIntegrityResult] = Field(
+        ...,
+        description="Resultado de integridad por bloque, en orden cronológico.",
+    )
+
+
+class ChainValidationSuccessResponse(BaseModel):
+    """Respuesta estándar del endpoint GET /api/chain/validate."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool = Field(..., description="Indica si la operación fue exitosa.")
+    message: str = Field(..., description="Mensaje descriptivo del resultado.")
+    data: ChainValidationData = Field(..., description="Resultado detallado de la validación.")
+    error: ApiErrorDetail | None = Field(
+        default=None,
+        description="Detalle de error, null en respuestas exitosas.",
+    )
