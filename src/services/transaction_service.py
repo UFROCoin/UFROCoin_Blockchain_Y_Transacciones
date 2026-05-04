@@ -3,17 +3,47 @@ from datetime import datetime, timezone
 from src.core.constants import TRANSACTION_EVENT_ROUTING_KEY
 from src.models.transaction import Transaction
 from src.core.rabbitmq_publisher import RabbitMQPublisher
+from src.services.external_wallet_service import ExternalWalletService
 
-# --- Lógica de Negocio ---
+# --- Inicialización de servicio ---
 
 class TransactionService:
     def __init__(self, db_client):
         self.db = db_client.blockchain_db
         self.publisher = RabbitMQPublisher()
+        self.wallet_service = ExternalWalletService()
+    
+    # --- Validaciones ---
+
+    def calculate_balance(self, address: str) -> float:
+        balance = 0.0
+
+        blocks = self.db.blocks.find()
+        for block in blocks:
+            for tx in block.get("transactions", []):
+                if tx.get("to") == address:
+                    balance += tx.get("amount", 0.0)
+                if tx.get("from") == address:
+                    balance -= tx.get("amount", 0.0)
+
+        pending_txs = self.dpending_txs = self.db.transacciones.find({"from": address, "status": "PENDING"})
+        for tx in pending_txs:
+            balance -= tx.get("amount", 0.0)
+
+        return balance
 
     # --- Gestión de Transferencias ---
 
     def create_transfer(self, transaction_data: dict) -> dict:
+        if not self.wallet_service.check_wallet_exist(transaction_data.get("to")):
+            raise ValueError("La wallet de destino es invalida o no existe")
+        
+        if transaction_data.get("type") == "TRANSFER":
+            current_balance = self.calculate_balance(transaction_data.get("from"))
+            if current_balance < transaction_data.get("amount"):
+                raise ValueError(f"Saldo insuficiente. Saldo disponible: {current_balance}")
+
+
         new_transaction = Transaction(**transaction_data)
         transaction_dict = new_transaction.model_dump(by_alias=True)
         
@@ -38,3 +68,46 @@ class TransactionService:
         )
 
         return transaction_dict
+    
+    #--- Historial de Transacciones ---
+
+    def get_transaction_history(self, address: str) -> list:
+        history = []
+
+        block = self.db.blocks.find()
+        for tx in block.geet("transactions", []):
+            if tx.get("from") == address or tx.get("to") == address:
+                tx_type = tx.get("type")
+                if tx_type == "TRANSFER":
+                    tx_type = "SEND" if tx.get("from") == address else "RECEIVE"
+                
+                history.append({
+                    "_id": str(tx.get("id", "")),
+                    "type": tx_type,
+                    "from": tx.get("from"),
+                    "to": tx.get("to"),
+                    "amount": float(tx.get("amount",0.00)),
+                    "timestamp": tx.get("timestamp"),
+                    "status": "CONFIRMED"
+                })
+
+        pending_txs = self.db.transacciones.find({
+            "$or": [{"from": addres}, {"to":address}]
+        })
+        for tx in pending_txs:
+            tx_type = tx.get("type")
+            if tx_type == "TRANSFER":
+                tx_type = "SEND" if tx.get("from") == address else "RECEIVE"
+
+                history.append({
+                    "_id": str(tx.get("_id")),
+                    "type": tx_type,
+                    "from": tx.get("from"),
+                    "to": tx.get("to"),
+                    "amount": float(tx.get("amount", 0.00)),
+                    "timestamp": tx.get("timestamp"),
+                    "status": tx.get("status", "PENDING")
+                })
+        
+        history.sort(key=lambda item: item.get("timestamp",""), reverse=True)
+        return history
