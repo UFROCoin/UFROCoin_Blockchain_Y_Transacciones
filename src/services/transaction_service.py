@@ -68,6 +68,20 @@ class TransactionService:
         )
 
         return transaction_dict
+
+    def get_pending_transactions(self) -> list[dict]:
+        pending_txs = self.db.transacciones.find({"status": "PENDING"})
+
+        return [
+            {
+                "id": str(tx.get("_id", "")),
+                "from": tx.get("from"),
+                "to": tx.get("to"),
+                "amount": tx.get("amount"),
+                "timestamp": tx.get("timestamp"),
+            }
+            for tx in pending_txs
+        ]
     
     #--- Historial de Transacciones ---
 

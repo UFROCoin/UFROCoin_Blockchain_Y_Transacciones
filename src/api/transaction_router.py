@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from src.models.transaction import Transaction
+from src.models.transaction import PendingTransactionsResponse, Transaction
 from src.services.transaction_service import TransactionService
 from src.core.database import get_mongo_client
 
@@ -7,6 +7,11 @@ from src.core.database import get_mongo_client
 
 router = APIRouter(
     prefix="/transactions",
+    tags=["transactions"]
+)
+
+pending_router = APIRouter(
+    prefix="/transaction",
     tags=["transactions"]
 )
 
@@ -48,3 +53,18 @@ async def create_transaction(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"DETALLE DEL ERROR: {str(e)}"
         )
+
+
+@pending_router.get(
+    "/pending",
+    response_model=PendingTransactionsResponse,
+    summary="Listar transacciones pendientes del mempool",
+    description="Retorna publicamente todas las transacciones con estado PENDING que aun no han sido confirmadas en un bloque.",
+)
+async def get_pending_transactions(
+    service: TransactionService = Depends(get_transaction_service),
+):
+    return {
+        "status": "ok",
+        "data": service.get_pending_transactions(),
+    }
