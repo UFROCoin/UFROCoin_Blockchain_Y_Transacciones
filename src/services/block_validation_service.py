@@ -1,9 +1,12 @@
 import hashlib
 import json
+import logging
 import re
 from datetime import datetime
 from importlib import import_module
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from src.core.constants import GENESIS_BLOCK_INDEX, GENESIS_PREVIOUS_HASH
 from src.models.block import BlockValidationRequest
@@ -52,14 +55,17 @@ class BlockValidationService:
 
     def validate_chain_integrity(self) -> dict[str, Any]:
         """
-        Recorre la blockchain completa de principio a fin (index ASC) y verifica
-        que el hash almacenado de cada bloque coincida con el hash recalculado
-        en tiempo real usando los datos crudos del bloque.
+        Recorre la blockchain completa de principio a fin (index ASC) y verifica:
+          1. Que el hash almacenado de cada bloque coincida con el hash recalculado
+             en tiempo real usando los datos crudos del bloque.
+          2. Que el previous_hash de cada bloque (a partir del índice 1) coincida
+             con el hash almacenado del bloque anterior (continuidad de la cadena).
 
         Esta operación es estrictamente read-only: no modifica ningún documento.
 
         Retorna un dict con:
             - chain_valid (bool): True si todos los bloques son íntegros.
+            - error_at_block (int | None): Índice del primer bloque corrupto, o None.
             - total_blocks (int): Cantidad de bloques evaluados.
             - blocks (list[dict]): Detalle por bloque con index, stored_hash,
               computed_hash y valid.
@@ -83,24 +89,49 @@ class BlockValidationService:
 
         results: list[dict[str, Any]] = []
         chain_valid = True
+        error_at_block: int | None = None
+        previous_stored_hash: str | None = None
 
         for raw_block in blocks_cursor:
+            block_index: int = raw_block.get("index", -1)
             stored_hash: str = raw_block.get("hash", "")
             computed_hash: str = self._calculate_block_hash_from_dict(raw_block)
-            block_valid: bool = stored_hash.lower() == computed_hash.lower()
 
-            if not block_valid:
+            # Verificación 1: integridad individual del hash.
+            hash_valid: bool = stored_hash.lower() == computed_hash.lower()
+
+            # Verificación 2: continuidad del previous_hash (aplica desde el bloque 1).
+            link_valid: bool = True
+            if previous_stored_hash is not None:
+                block_previous_hash: str = raw_block.get("previous_hash", "")
+                link_valid = block_previous_hash.lower() == previous_stored_hash.lower()
+
+            block_valid: bool = hash_valid and link_valid
+
+            if not block_valid and chain_valid:
+                # Registra el primer bloque corrupto encontrado.
                 chain_valid = False
+                error_at_block = block_index
+                logger.error(
+                    "Chain integrity failure detected at block %d — "
+                    "hash_valid=%s, link_valid=%s",
+                    block_index,
+                    hash_valid,
+                    link_valid,
+                )
 
             results.append({
-                "index": raw_block.get("index"),
+                "index": block_index,
                 "stored_hash": stored_hash,
                 "computed_hash": computed_hash,
                 "valid": block_valid,
             })
 
+            previous_stored_hash = stored_hash
+
         return {
             "chain_valid": chain_valid,
+            "error_at_block": error_at_block,
             "total_blocks": len(results),
             "blocks": results,
         }
