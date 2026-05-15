@@ -83,6 +83,77 @@ def get_block_service() -> BlockService:
     return BlockService()
 
 
+def block_not_found_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "status": "error",
+            "code": "BLOCK_NOT_FOUND",
+            "message": "Block not found",
+        },
+    )
+
+
+@router.get(
+    "/block/hash/{block_hash}",
+    response_model=BlockData,
+    summary="Consultar bloque por hash",
+    description="Retorna un bloque específico por su hash e incluye todas sus transacciones.",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": ApiErrorResponse,
+            "description": "No existe un bloque con el hash indicado",
+        }
+    },
+)
+async def get_block_by_hash(
+    block_hash: str,
+    block_service: BlockService = Depends(get_block_service),
+):
+    block = block_service.get_block_by_hash(block_hash)
+    if block is None:
+        return block_not_found_response()
+
+    return BlockData(
+        index=block["index"],
+        timestamp=block["timestamp"],
+        transactions=block.get("transactions", []),
+        previous_hash=block["previous_hash"],
+        nonce=block["nonce"],
+        hash=block["hash"],
+    ).model_dump(by_alias=True)
+
+
+@router.get(
+    "/block/{index}",
+    response_model=BlockData,
+    summary="Consultar bloque por índice",
+    description="Retorna un bloque específico por índice e incluye todas sus transacciones.",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": ApiErrorResponse,
+            "description": "No existe un bloque con el índice indicado",
+        }
+    },
+)
+async def get_block_by_index(
+    index: int,
+    block_service: BlockService = Depends(get_block_service),
+):
+    block = block_service.get_block_by_index(index)
+    if block is None:
+        return block_not_found_response()
+
+    return BlockData(
+        index=block["index"],
+        timestamp=block["timestamp"],
+        transactions=block.get("transactions", []),
+        previous_hash=block["previous_hash"],
+        nonce=block["nonce"],
+        hash=block["hash"],
+    ).model_dump(by_alias=True)
+
+
 @router.get(
     "/chain",
     response_model=ChainSuccessResponse,
