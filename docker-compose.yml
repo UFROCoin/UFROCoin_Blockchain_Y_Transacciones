@@ -15,10 +15,27 @@ services:
       retries: 5
       start_period: 10s
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: ufrocoin_rabbitmq
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
     container_name: ufrocoin_api
     env_file:
       - .env
@@ -27,6 +44,9 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
   mongodb_data:
+  rabbitmq_data:

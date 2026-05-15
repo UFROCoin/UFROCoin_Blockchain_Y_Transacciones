@@ -254,3 +254,24 @@ class ChainValidationSuccessResponse(BaseModel):
         default=None,
         description="Detalle de error, null en respuestas exitosas.",
     )
+
+
+class ChainValidateResponse(BaseModel):
+    """Respuesta mínima del endpoint GET /api/chain/validate.
+
+    Formato canónico exigido por el ticket de auditoría de integridad:
+        {"valid": true/false, "error_at_block": N | null}
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    valid: bool = Field(
+        ...,
+        description="True si la cadena es íntegra; False si se detectó al menos un bloque corrupto.",
+        examples=[True],
+    )
+    error_at_block: int | None = Field(
+        ...,
+        description="Índice del primer bloque corrupto, o null si la cadena es válida.",
+        examples=[None],
+    )

@@ -17,14 +17,17 @@ Este archivo resume el contexto completo de la implementacion de la **validacion
 
 ### User Story implementada
 
-> Como sistema, quiero recalcular los hashes de cada bloque comparandolos con los almacenados para asegurar que el contenido de la cadena es veridico.
+> Como sistema, quiero exponer un endpoint de validacion y registrar el punto exacto de falla para facilitar la auditoria de la integridad.
 
 ### Criterios de aceptacion cubiertos
 
-- Recorrer la blockchain de principio a fin (index ASC).
-- Por cada bloque, regenerar el hash actual usando el algoritmo definido y los datos crudos del bloque.
-- Confirmar que el hash almacenado coincide con el hash generado en tiempo real.
-- La funcion de validacion es estrictamente read-only: no modifica ningun documento.
+- [x] Crear el endpoint `GET /api/chain/validate`.
+- [x] Integrar la verificacion de continuidad: el `previous_hash` de cada bloque debe coincidir con el hash del bloque anterior.
+- [x] El endpoint retorna el formato `{"valid": true/false, "error_at_block": N}`.
+- [x] Si la cadena es invalida, se genera un log en el servidor indicando el indice del primer bloque corrupto detectado.
+- [x] Recorrer la blockchain de principio a fin (index ASC).
+- [x] Por cada bloque, regenerar el hash actual usando el algoritmo definido y los datos crudos del bloque.
+- [x] La funcion de validacion es estrictamente read-only: no modifica ningun documento.
 
 ### Fuera de alcance
 
@@ -32,7 +35,6 @@ No se implemento ni se debe considerar parte de esta sesion:
 
 - modificacion de bloques
 - reparacion o correccion de hashes
-- validacion de la cadena de `previous_hash` entre bloques consecutivos
 - autenticacion del endpoint
 - paginacion de la respuesta de validacion
 
@@ -44,55 +46,48 @@ No se implemento ni se debe considerar parte de esta sesion:
 
 #### `src/models/block.py`
 
-Se agregaron tres modelos Pydantic al final del archivo:
+Se agregaron cuatro modelos Pydantic al final del archivo:
 
 - `BlockIntegrityResult`: resultado de integridad para un bloque individual. Campos:
   - `index` (int): posicion del bloque en la cadena.
   - `stored_hash` (str): hash SHA-256 almacenado en MongoDB.
   - `computed_hash` (str): hash SHA-256 recalculado en tiempo real.
-  - `valid` (bool): `True` si `stored_hash == computed_hash`.
+  - `valid` (bool): `True` si el hash individual es correcto Y el `previous_hash` enlaza correctamente con el bloque anterior.
 
-- `ChainValidationData`: payload de la respuesta de validacion. Campos:
+- `ChainValidationData`: payload de la respuesta detallada. Campos:
   - `chain_valid` (bool): `True` si todos los bloques son integros.
   - `total_blocks` (int): cantidad total de bloques evaluados.
   - `blocks` (list[BlockIntegrityResult]): detalle por bloque en orden cronologico.
 
-- `ChainValidationSuccessResponse`: envelope estandar de respuesta del endpoint. Campos:
-  - `success` (bool)
-  - `message` (str)
-  - `data` (ChainValidationData)
-  - `error` (ApiErrorDetail | None)
+- `ChainValidationSuccessResponse`: envelope estandar de respuesta detallada (conservado para compatibilidad interna).
+
+- **`ChainValidateResponse`** *(nuevo — contrato publico del ticket)*: respuesta minima exigida. Campos:
+  - `valid` (bool): `True` si la cadena es integra.
+  - `error_at_block` (int | None): indice del primer bloque corrupto, o `null` si la cadena es valida.
 
 #### `src/services/block_validation_service.py`
 
-Se agrego el metodo `validate_chain_integrity()` a `BlockValidationService`.
+Se agrego `import logging` y el logger de modulo:
 
-Comportamiento:
+```python
+logger = logging.getLogger(__name__)
+```
 
-1. Verifica que la instancia tenga conexion a DB; si no, lanza `RuntimeError`.
-2. Consulta la coleccion `blocks` con `.find({}, {"_id": 0}).sort("index", ASCENDING)` — sin escrituras.
-3. Para cada bloque del cursor:
-   - Obtiene `stored_hash = raw_block["hash"]`.
-   - Recalcula `computed_hash` usando `_calculate_block_hash_from_dict`, que ya diferencia correctamente entre bloque genesis (concatenacion de campos) y bloques normales (JSON serializado + SHA-256).
-   - Compara ambos hashes en minusculas.
-   - Si no coinciden, marca `chain_valid = False`.
-4. Retorna un dict con `chain_valid`, `total_blocks` y `blocks` (detalle por bloque).
+Se actualizo el metodo `validate_chain_integrity()` con dos verificaciones por bloque:
 
-Se agrego tambien el import `from importlib import import_module` necesario para cargar `pymongo` dentro del metodo.
+1. **Integridad individual del hash** (`hash_valid`): `stored_hash == computed_hash`.
+2. **Continuidad de la cadena** (`link_valid`): `block.previous_hash == hash_almacenado_del_bloque_anterior`. Aplica desde el bloque con index >= 1.
+
+Un bloque falla si cualquiera de las dos verificaciones falla. Solo se loguea y se registra `error_at_block` para el **primer** bloque corrupto encontrado.
+
+El metodo ahora retorna un dict con `chain_valid`, `error_at_block`, `total_blocks` y `blocks`.
 
 #### `src/api/block_router.py`
 
-Se agrego el endpoint `GET /api/chain/validate` y los imports de los nuevos modelos.
-
-Comportamiento del endpoint:
-
-- Usa la misma dependencia `get_block_validation_service` que ya existia para `POST /api/block/validate`.
-- Llama a `validation_service.validate_chain_integrity()`.
-- Construye y retorna `ChainValidationSuccessResponse`.
-- El campo `message` refleja el resultado:
-  - cadena integra: `"Chain integrity verified successfully"`
-  - cadena comprometida: `"Chain integrity compromised"`
-- Siempre devuelve HTTP 200; `chain_valid` dentro de `data` indica el resultado real.
+- Se importo `ChainValidateResponse`.
+- El endpoint `GET /api/chain/validate` ahora usa `response_model=ChainValidateResponse`.
+- La descripcion del endpoint se actualizo para documentar ambas verificaciones y el logging.
+- La respuesta se simplifica a `{"valid": ..., "error_at_block": ...}`.
 
 ---
 
@@ -106,90 +101,35 @@ GET /api/chain/validate
 
 No requiere cuerpo ni parametros.
 
-### Respuesta exitosa — cadena integra
+### Respuesta — cadena integra
 
 ```json
-{
-  "success": true,
-  "message": "Chain integrity verified successfully",
-  "data": {
-    "chain_valid": true,
-    "total_blocks": 3,
-    "blocks": [
-      {
-        "index": 0,
-        "stored_hash": "a1b2c3...",
-        "computed_hash": "a1b2c3...",
-        "valid": true
-      },
-      {
-        "index": 1,
-        "stored_hash": "d4e5f6...",
-        "computed_hash": "d4e5f6...",
-        "valid": true
-      },
-      {
-        "index": 2,
-        "stored_hash": "789abc...",
-        "computed_hash": "789abc...",
-        "valid": true
-      }
-    ]
-  },
-  "error": null
-}
+{"valid": true, "error_at_block": null}
 ```
 
-### Respuesta exitosa — cadena comprometida
+### Respuesta — cadena comprometida
 
 ```json
-{
-  "success": true,
-  "message": "Chain integrity compromised",
-  "data": {
-    "chain_valid": false,
-    "total_blocks": 2,
-    "blocks": [
-      {
-        "index": 0,
-        "stored_hash": "aaaa...",
-        "computed_hash": "a1b2c3...",
-        "valid": false
-      },
-      {
-        "index": 1,
-        "stored_hash": "d4e5f6...",
-        "computed_hash": "d4e5f6...",
-        "valid": true
-      }
-    ]
-  },
-  "error": null
-}
+{"valid": false, "error_at_block": 3}
 ```
+
+`error_at_block` contiene el indice del **primer** bloque donde se detecto la falla (puede ser por hash incorrecto o por `previous_hash` que no enlaza con el bloque anterior).
 
 ### Respuesta — cadena vacia
 
 ```json
-{
-  "success": true,
-  "message": "Chain integrity verified successfully",
-  "data": {
-    "chain_valid": true,
-    "total_blocks": 0,
-    "blocks": []
-  },
-  "error": null
-}
+{"valid": true, "error_at_block": null}
 ```
 
 ---
 
-## 5. Regla de recalculo de hash por tipo de bloque
+## 5. Logica de validacion por tipo de verificacion
 
-El metodo `_calculate_block_hash_from_dict` ya existia en `BlockValidationService` y define dos caminos:
+### Verificacion 1 — Integridad individual del hash
 
-### Bloque genesis (`index == 0` y `previous_hash == "0" * 64`)
+El metodo `_calculate_block_hash_from_dict` define dos caminos segun el tipo de bloque:
+
+#### Bloque genesis (`index == 0` y `previous_hash == "0" * 64`)
 
 Se usa `calculate_concatenated_block_hash` de `src/utils/hash_utils.py`:
 
@@ -197,7 +137,7 @@ Se usa `calculate_concatenated_block_hash` de `src/utils/hash_utils.py`:
 SHA-256( str(index) + str(previous_hash) + str(timestamp) + JSON(transactions) + str(nonce) )
 ```
 
-### Bloques normales
+#### Bloques normales
 
 Se usa serializacion JSON deterministica:
 
@@ -214,62 +154,104 @@ SHA-256( json.dumps(payload, sort_keys=True, separators=(",", ":")) )
 
 El campo `hash` nunca se incluye en el payload de recalculo.
 
+### Verificacion 2 — Continuidad del previous_hash
+
+Para cada bloque con `index >= 1`, se comprueba:
+
+```python
+block["previous_hash"].lower() == hash_almacenado_del_bloque_anterior.lower()
+```
+
+Esta verificacion detecta bloques reordenados o con `previous_hash` adulterado aunque el hash individual sea correcto.
+
+### Logging del primer bloque corrupto
+
+Cuando se detecta el primer fallo (ya sea de hash o de continuidad), se emite:
+
+```
+ERROR src.services.block_validation_service — Chain integrity failure detected at block N — hash_valid=True/False, link_valid=True/False
+```
+
+Los bloques subsiguientes aun se evaluan (para tener el detalle completo), pero `error_at_block` ya no se sobreescribe.
+
 ---
 
 ## 6. Como verificar que esta bien
 
-### Verificacion tecnica basica
+### Verificacion de importaciones (sin Docker)
 
 ```powershell
-python -m compileall src
-python -c "import src.main; print(src.main.app.title)"
+.venv\Scripts\python.exe -c "from src.services.block_validation_service import BlockValidationService; from src.models.block import ChainValidateResponse; print('Imports OK')"
 ```
 
-### Verificacion funcional manual recomendada
+### Verificacion funcional con Docker
 
-#### Caso 1: cadena integra
+#### Levantar el stack
 
-Pasos:
+```powershell
+docker-compose up --build -d
+```
 
-1. Levantar la app con MongoDB disponible y al menos el bloque genesis creado.
-2. Llamar a `GET /api/chain/validate`.
+#### Caso 1 — Cadena integra
 
-Esperado:
-
-- HTTP 200.
-- `data.chain_valid = true`.
-- `data.total_blocks >= 1`.
-- Todos los bloques en `data.blocks` tienen `valid = true`.
-- `stored_hash == computed_hash` en cada bloque.
-
-#### Caso 2: bloque adulterado
-
-Pasos:
-
-1. Con MongoDB disponible, modificar manualmente el campo `hash` de cualquier bloque (por ejemplo, desde Mongo Compass o mongosh).
-2. Llamar a `GET /api/chain/validate`.
+```powershell
+Invoke-WebRequest -Uri "http://localhost:8000/api/chain/validate" -UseBasicParsing
+```
 
 Esperado:
-
 - HTTP 200.
-- `data.chain_valid = false`.
-- El bloque adulterado aparece con `valid = false`.
-- `stored_hash` muestra el valor adulterado.
-- `computed_hash` muestra el hash real recalculado.
+- `{"valid": true, "error_at_block": null}`.
 
-#### Caso 3: cadena vacia
+#### Caso 2 — Hash de bloque adulterado
 
-Pasos:
+1. Desde mongosh o MongoDB Compass, modificar el campo `hash` de cualquier bloque:
 
-1. Levantar la app con MongoDB vacio (sin bloques).
-2. Llamar a `GET /api/chain/validate`.
+```js
+use blockchain_db
+db.blocks.updateOne(
+  { index: 1 },
+  { $set: { hash: "0000000000000000000000000000000000000000000000000000000000000000" } }
+)
+```
+
+2. Llamar al endpoint.
 
 Esperado:
+- `{"valid": false, "error_at_block": 1}`.
+- Log en el servidor: `Chain integrity failure detected at block 1 — hash_valid=False, link_valid=True`.
 
-- HTTP 200.
-- `data.chain_valid = true`.
-- `data.total_blocks = 0`.
-- `data.blocks = []`.
+#### Caso 3 — previous_hash roto (enlace de cadena adulterado)
+
+1. Modificar el campo `previous_hash` de un bloque para que no coincida con el hash del bloque anterior:
+
+```js
+db.blocks.updateOne(
+  { index: 2 },
+  { $set: { previous_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+)
+```
+
+2. Llamar al endpoint.
+
+Esperado:
+- `{"valid": false, "error_at_block": 2}`.
+- Log: `Chain integrity failure detected at block 2 — hash_valid=True, link_valid=False`.
+
+#### Caso 4 — Cadena vacia
+
+1. Levantar la app con MongoDB sin bloques.
+2. Llamar al endpoint.
+
+Esperado:
+- `{"valid": true, "error_at_block": null}`.
+
+#### Ver logs del servidor
+
+```powershell
+docker logs ufrocoin_api
+```
+
+Buscar lineas con: `Chain integrity failure detected at block`.
 
 ---
 
@@ -277,7 +259,11 @@ Esperado:
 
 ### Siempre HTTP 200
 
-El endpoint devuelve 200 independientemente de si la cadena esta integra o no. El resultado real esta en `data.chain_valid`. Esto es intencional: la operacion de validacion en si fue exitosa; el estado de la cadena es informacion de negocio, no un error de servidor.
+El endpoint devuelve 200 independientemente de si la cadena esta integra o no. El resultado real esta en `valid`. Esto es intencional: la operacion de validacion en si fue exitosa; el estado de la cadena es informacion de negocio, no un error de servidor.
+
+### Solo se registra el primer bloque corrupto
+
+`error_at_block` captura unicamente el primer fallo. Los bloques siguientes aun se evaluan para tener visibilidad completa via logs, pero no sobreescriben el indice inicial de corrupcion.
 
 ### Read-only garantizado
 
@@ -295,10 +281,10 @@ Si `BlockValidationService` se instancia sin `db_client`, `validate_chain_integr
 
 ## 8. Lo que falta por hacer
 
-- Validar que el `previous_hash` de cada bloque coincida con el `hash` del bloque anterior (encadenamiento).
 - Agregar paginacion a la respuesta si la cadena crece y la respuesta se vuelve grande.
-- Definir con el equipo si un resultado `chain_valid = false` debe devolver un codigo HTTP diferente (por ejemplo, 409 o 422).
+- Definir con el equipo si un resultado `valid: false` debe devolver un codigo HTTP diferente (por ejemplo, 409 o 422).
 - Definir rol o autenticacion necesaria para acceder al endpoint si se considera sensible.
+- Considerar exponer el detalle por bloque (`stored_hash`, `computed_hash`) en un endpoint separado o como query param opcional.
 
 ---
 
@@ -306,12 +292,13 @@ Si `BlockValidationService` se instancia sin `db_client`, `validate_chain_integr
 
 - La logica de `_calculate_block_hash_from_dict` y `_is_genesis_block` en `BlockValidationService`: cualquier cambio rompe tanto la validacion individual como la de cadena.
 - La regla de concatenacion para el genesis en `hash_utils.py`: esta directamente ligada al hash almacenado del bloque genesis real en produccion.
-- Los modelos `BlockIntegrityResult`, `ChainValidationData` y `ChainValidationSuccessResponse`: son el contrato publico del endpoint; cambiarlos sin versionado puede romper clientes que ya consuman la respuesta.
+- El modelo `ChainValidateResponse`: es el contrato publico del endpoint definido en el ticket; cambiar `valid` o `error_at_block` sin versionado puede romper clientes que ya consuman la respuesta.
 
 ---
 
 ## 10. Orden de commits recomendado
 
-1. `feat: add chain integrity validation response models`
-2. `feat: implement validate_chain_integrity in BlockValidationService`
-3. `feat: add GET /api/chain/validate endpoint`
+1. `feat: add ChainValidateResponse model with {valid, error_at_block} shape`
+2. `feat: add previous_hash continuity check and server logging to validate_chain_integrity`
+3. `feat: update GET /api/chain/validate to return simplified audit response`
+4. `docs: update CHAIN_INTEGRITY_HANDOFF with ticket changes`
