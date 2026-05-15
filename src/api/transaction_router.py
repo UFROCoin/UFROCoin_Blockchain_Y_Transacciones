@@ -60,7 +60,7 @@ async def create_transaction(
     response_model=PendingTransactionsResponse,
     response_model_by_alias=True,  # ← agregar esto
     summary="Listar transacciones pendientes del mempool",
-    ...
+    description="Retorna publicamente todas las transacciones con estado PENDING que aun no han sido confirmadas en un bloque.",
 )
 async def get_pending_transactions(
     service: TransactionService = Depends(get_transaction_service),
