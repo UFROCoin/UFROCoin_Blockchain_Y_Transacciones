@@ -10,6 +10,7 @@ from src.models.block import (
     BlockValidationRequest,
     BlockValidationSuccessResponse,
     ChainSuccessResponse,
+    ChainValidateResponse,
     ChainValidationData,
     ChainValidationSuccessResponse,
     TransactionResponseData,
@@ -82,6 +83,77 @@ def get_block_service() -> BlockService:
     return BlockService()
 
 
+def block_not_found_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={
+            "status": "error",
+            "code": "BLOCK_NOT_FOUND",
+            "message": "Block not found",
+        },
+    )
+
+
+@router.get(
+    "/block/hash/{block_hash}",
+    response_model=BlockData,
+    summary="Consultar bloque por hash",
+    description="Retorna un bloque específico por su hash e incluye todas sus transacciones.",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": ApiErrorResponse,
+            "description": "No existe un bloque con el hash indicado",
+        }
+    },
+)
+async def get_block_by_hash(
+    block_hash: str,
+    block_service: BlockService = Depends(get_block_service),
+):
+    block = block_service.get_block_by_hash(block_hash)
+    if block is None:
+        return block_not_found_response()
+
+    return BlockData(
+        index=block["index"],
+        timestamp=block["timestamp"],
+        transactions=block.get("transactions", []),
+        previous_hash=block["previous_hash"],
+        nonce=block["nonce"],
+        hash=block["hash"],
+    ).model_dump(by_alias=True)
+
+
+@router.get(
+    "/block/{index}",
+    response_model=BlockData,
+    summary="Consultar bloque por índice",
+    description="Retorna un bloque específico por índice e incluye todas sus transacciones.",
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": ApiErrorResponse,
+            "description": "No existe un bloque con el índice indicado",
+        }
+    },
+)
+async def get_block_by_index(
+    index: int,
+    block_service: BlockService = Depends(get_block_service),
+):
+    block = block_service.get_block_by_index(index)
+    if block is None:
+        return block_not_found_response()
+
+    return BlockData(
+        index=block["index"],
+        timestamp=block["timestamp"],
+        transactions=block.get("transactions", []),
+        previous_hash=block["previous_hash"],
+        nonce=block["nonce"],
+        hash=block["hash"],
+    ).model_dump(by_alias=True)
+
+
 @router.get(
     "/chain",
     response_model=ChainSuccessResponse,
@@ -126,13 +198,16 @@ async def get_chain(
 
 @router.get(
     "/chain/validate",
-    response_model=ChainValidationSuccessResponse,
+    response_model=ChainValidateResponse,
     summary="Validar la integridad de la cadena de bloques completa",
     description=(
         "Recorre todos los bloques de la blockchain de principio a fin (index ASC), "
         "recalcula el hash SHA-256 de cada uno con los datos crudos almacenados y lo "
-        "compara con el hash guardado. "
-        "La operación es estrictamente read-only: no modifica ningún documento."
+        "compara con el hash guardado. Además verifica que el previous_hash de cada "
+        "bloque coincida con el hash del bloque anterior (continuidad de la cadena). "
+        "La operación es estrictamente read-only: no modifica ningún documento. "
+        "Si la cadena es inválida, se genera un log en el servidor con el índice "
+        "del primer bloque corrupto detectado."
     ),
     responses={
         status.HTTP_500_INTERNAL_SERVER_ERROR: {
@@ -146,26 +221,7 @@ async def validate_chain(
 ):
     result = validation_service.validate_chain_integrity()
 
-    block_results = [
-        BlockIntegrityResult(
-            index=b["index"],
-            stored_hash=b["stored_hash"],
-            computed_hash=b["computed_hash"],
-            valid=b["valid"],
-        )
-        for b in result["blocks"]
-    ]
-
-    chain_valid: bool = result["chain_valid"]
-    message = "Chain integrity verified successfully" if chain_valid else "Chain integrity compromised"
-
-    return ChainValidationSuccessResponse(
-        success=True,
-        message=message,
-        data=ChainValidationData(
-            chain_valid=chain_valid,
-            total_blocks=result["total_blocks"],
-            blocks=block_results,
-        ),
-        error=None,
+    return ChainValidateResponse(
+        valid=result["chain_valid"],
+        error_at_block=result["error_at_block"],
     ).model_dump()

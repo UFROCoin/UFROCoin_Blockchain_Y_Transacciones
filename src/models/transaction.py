@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 from enum import Enum
 
 # --- Enumeraciones ---
@@ -26,3 +26,18 @@ class Transaction(BaseModel):
     block_index: Optional[int] = None
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class PendingTransactionData(BaseModel):
+    id: str
+    sender: str = Field(..., alias="from")
+    receiver: str = Field(..., alias="to")
+    amount: float
+    timestamp: str
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class PendingTransactionsResponse(BaseModel):
+    status: Literal["ok"]
+    data: list[PendingTransactionData]
