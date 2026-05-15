@@ -46,4 +46,35 @@ class BlockService:
             {},
             {"_id": 0},  # excluir _id interno de MongoDB de la respuesta
         ).sort("index", pymongo.ASCENDING).skip(skip).limit(limit)
-        return list(cursor), total
+        return [self._with_confirmed_transaction_indexes(block) for block in cursor], total
+
+    def get_block_by_index(self, index: int) -> dict[str, Any] | None:
+        block = self.blocks_collection.find_one({"index": index}, {"_id": 0})
+        if block is None:
+            return None
+        return self._with_confirmed_transaction_indexes(block)
+
+    def get_block_by_hash(self, block_hash: str) -> dict[str, Any] | None:
+        block = self.blocks_collection.find_one({"hash": block_hash}, {"_id": 0})
+        if block is None:
+            return None
+        return self._with_confirmed_transaction_indexes(block)
+
+    @staticmethod
+    def _with_confirmed_transaction_indexes(block: dict[str, Any]) -> dict[str, Any]:
+        block_document = dict(block)
+        block_index = block_document.get("index")
+        transactions = []
+
+        for transaction in block_document.get("transactions", []):
+            if not isinstance(transaction, dict):
+                transactions.append(transaction)
+                continue
+
+            transaction_document = dict(transaction)
+            transaction_document.setdefault("status", "CONFIRMED")
+            transaction_document["block_index"] = block_index
+            transactions.append(transaction_document)
+
+        block_document["transactions"] = transactions
+        return block_document
