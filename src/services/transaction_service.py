@@ -52,6 +52,12 @@ class TransactionService:
         if not self.wallet_service.check_wallet_exist(transaction_data.get("to")):
             raise ValueError("La wallet de destino es invalida o no existe")
         
+        from_address = transaction_data.get("from")
+        pending_count = self.db.transacciones.count_documents({"from": from_address, "status": "PENDING"})
+        if pending_count >= 10:
+            raise ValueError("No se pueden crear más de 10 transacciones pendientes para la misma wallet de origen")
+
+
         if transaction_data.get("type") == "TRANSFER":
             current_balance = self.calculate_balance(transaction_data.get("from"))
             if current_balance < transaction_data.get("amount"):
