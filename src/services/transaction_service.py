@@ -45,6 +45,9 @@ class TransactionService:
         
         if "." in str(amount) and len(str(amount).split(".")[1]) > 2:
             raise ValueError("El monto de la transacción no puede tener más de 2 decimales")
+        
+        if not self.wallet_service.check_wallet_exist(transaction_data.get("from")):
+            raise ValueError("La wallet de origen es invalida o no existe")
 
         if not self.wallet_service.check_wallet_exist(transaction_data.get("to")):
             raise ValueError("La wallet de destino es invalida o no existe")
