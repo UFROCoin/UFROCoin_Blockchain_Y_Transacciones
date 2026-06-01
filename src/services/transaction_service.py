@@ -29,7 +29,7 @@ class TransactionService:
                 if tx.get("from") == address:
                     balance -= tx.get("amount", 0.0)
 
-        pending_txs = self.dpending_txs = self.db.transacciones.find({"from": address, "status": "PENDING"})
+        pending_txs = self.db.transacciones.find({"from": address, "status": "PENDING"})
         for tx in pending_txs:
             balance -= tx.get("amount", 0.0)
 
@@ -38,6 +38,14 @@ class TransactionService:
     # --- Gestión de Transferencias ---
 
     def create_transfer(self, transaction_data: dict) -> dict:
+        amount = transaction_data.get("amount", 0.0)
+
+        if amount <= 0:
+            raise ValueError("El monto de la transacción debe ser mayor a cero")
+        
+        if "." in str(amount) and len(str(amount).split(".")[1]) > 2:
+            raise ValueError("El monto de la transacción no puede tener más de 2 decimales")
+
         if not self.wallet_service.check_wallet_exist(transaction_data.get("to")):
             raise ValueError("La wallet de destino es invalida o no existe")
         
@@ -94,12 +102,13 @@ class TransactionService:
     def get_transaction_history(self, address: str) -> list:
         history = []
 
-        block = self.db.blocks.find()
-        for tx in block.geet("transactions", []):
-            if tx.get("from") == address or tx.get("to") == address:
-                tx_type = tx.get("type")
-                if tx_type == "TRANSFER":
-                    tx_type = "SEND" if tx.get("from") == address else "RECEIVE"
+        blocks = self.db.blocks.find()
+        for block in blocks:
+            for tx in block.get("transactions", []):
+                if tx.get("from") == address or tx.get("to") == address:
+                    tx_type = tx.get("type")
+                    if tx_type == "TRANSFER":
+                        tx_type = "SEND" if tx.get("from") == address else "RECEIVE"
                 
                 history.append({
                     "_id": str(tx.get("id", "")),
@@ -112,7 +121,7 @@ class TransactionService:
                 })
 
         pending_txs = self.db.transacciones.find({
-            "$or": [{"from": addres}, {"to":address}]
+            "$or": [{"from": address}, {"to": address}]
         })
         for tx in pending_txs:
             tx_type = tx.get("type")
