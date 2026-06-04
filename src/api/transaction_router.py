@@ -27,9 +27,52 @@ def get_transaction_service():
     response_model=Transaction,
     status_code=status.HTTP_201_CREATED,
     summary="Crear una nueva transferencia",
+<<<<<<< Updated upstream
     description="Registra una transferencia en el mempool tras validar que la wallet de destino existe y que el emisor tiene saldo suficiente.",
     responses={
         400: {"description": "Error de validación: Saldo insuficiente o wallet de destino no encontrada"},
+=======
+    description=(
+        "Registra una transferencia en el mempool tras aplicar las siguientes validaciones de seguridad:\n"
+        "- El monto debe ser estrictamente positivo con un máximo de 2 decimales.\n"
+        "- Ambas wallets (origen y destino) deben existir en el sistema.\n"
+        "- El emisor no puede superar un límite máximo de 10 transacciones pendientes simultáneas."
+    ),
+    responses={
+        400: {
+            "description": "Error de validación de seguridad",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "monto_invalido": {
+                            "summary": "Monto menor o igual a cero",
+                            "value": {"detail": "INVALID_AMOUNT"}
+                        },
+                        "decimales_excedidos": {
+                            "summary": "Más de 2 decimales",
+                            "value": {"detail": "El monto no puede tener más de 2 decimales"}
+                        },
+                        "wallet_origen_inexistente": {
+                            "summary": "Wallet de origen no encontrada",
+                            "value": {"detail": "La wallet de origen es invalida o no existe"}
+                        },
+                        "wallet_destino_inexistente": {
+                            "summary": "Wallet de destino no encontrada",
+                            "value": {"detail": "La wallet de destino es invalida o no existe"}
+                        },
+                        "limite_mempool_excedido": {
+                            "summary": "Límite anti-spam superado",
+                            "value": {"detail": "PENDING_LIMIT_EXCEEDED"}
+                        },
+                        "saldo_insuficiente": {
+                            "summary": "Fondos insuficientes",
+                            "value": {"detail": "Saldo insuficiente. Saldo disponible: X.X"}
+                        }
+                    }
+                }
+            }
+        },
+>>>>>>> Stashed changes
         500: {"description": "Error interno del servidor"}
     }
 )
@@ -46,7 +89,10 @@ async def create_transaction(
             detail=str(ve)
         )
     except Exception as e:
+<<<<<<< Updated upstream
         # Vamos a imprimir el error en consola y enviarlo en la respuesta
+=======
+>>>>>>> Stashed changes
         import traceback
         traceback.print_exc() 
         raise HTTPException(
@@ -58,9 +104,15 @@ async def create_transaction(
 @pending_router.get(
     "/pending",
     response_model=PendingTransactionsResponse,
+<<<<<<< Updated upstream
     response_model_by_alias=True,  # ← agregar esto
     summary="Listar transacciones pendientes del mempool",
     description="Retorna publicamente todas las transacciones con estado PENDING que aun no han sido confirmadas en un bloque.",
+=======
+    response_model_by_alias=True,
+    summary="Listar transacciones pendientes del mempool",
+    description="Retorna públicamente todas las transacciones con estado PENDING que aún no han sido confirmadas en un bloque.",
+>>>>>>> Stashed changes
 )
 async def get_pending_transactions(
     service: TransactionService = Depends(get_transaction_service),
@@ -68,4 +120,8 @@ async def get_pending_transactions(
     return {
         "status": "ok",
         "data": service.get_pending_transactions(),
+<<<<<<< Updated upstream
     }
+=======
+    }
+>>>>>>> Stashed changes
