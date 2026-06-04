@@ -27,11 +27,6 @@ def get_transaction_service():
     response_model=Transaction,
     status_code=status.HTTP_201_CREATED,
     summary="Crear una nueva transferencia",
-<<<<<<< Updated upstream
-    description="Registra una transferencia en el mempool tras validar que la wallet de destino existe y que el emisor tiene saldo suficiente.",
-    responses={
-        400: {"description": "Error de validación: Saldo insuficiente o wallet de destino no encontrada"},
-=======
     description=(
         "Registra una transferencia en el mempool tras aplicar las siguientes validaciones de seguridad:\n"
         "- El monto debe ser estrictamente positivo con un máximo de 2 decimales.\n"
@@ -72,7 +67,6 @@ def get_transaction_service():
                 }
             }
         },
->>>>>>> Stashed changes
         500: {"description": "Error interno del servidor"}
     }
 )
@@ -89,10 +83,6 @@ async def create_transaction(
             detail=str(ve)
         )
     except Exception as e:
-<<<<<<< Updated upstream
-        # Vamos a imprimir el error en consola y enviarlo en la respuesta
-=======
->>>>>>> Stashed changes
         import traceback
         traceback.print_exc() 
         raise HTTPException(
@@ -104,15 +94,9 @@ async def create_transaction(
 @pending_router.get(
     "/pending",
     response_model=PendingTransactionsResponse,
-<<<<<<< Updated upstream
-    response_model_by_alias=True,  # ← agregar esto
-    summary="Listar transacciones pendientes del mempool",
-    description="Retorna publicamente todas las transacciones con estado PENDING que aun no han sido confirmadas en un bloque.",
-=======
     response_model_by_alias=True,
     summary="Listar transacciones pendientes del mempool",
     description="Retorna públicamente todas las transacciones con estado PENDING que aún no han sido confirmadas en un bloque.",
->>>>>>> Stashed changes
 )
 async def get_pending_transactions(
     service: TransactionService = Depends(get_transaction_service),
@@ -120,8 +104,4 @@ async def get_pending_transactions(
     return {
         "status": "ok",
         "data": service.get_pending_transactions(),
-<<<<<<< Updated upstream
     }
-=======
-    }
->>>>>>> Stashed changes
