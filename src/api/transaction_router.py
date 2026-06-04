@@ -10,11 +10,6 @@ router = APIRouter(
     tags=["transactions"]
 )
 
-pending_router = APIRouter(
-    prefix="/transaction",
-    tags=["transactions"]
-)
-
 # --- Inyección de Dependencias ---
 
 def get_transaction_service():
@@ -91,7 +86,7 @@ async def create_transaction(
         )
 
 
-@pending_router.get(
+@router.get(
     "/pending",
     response_model=PendingTransactionsResponse,
     response_model_by_alias=True,
