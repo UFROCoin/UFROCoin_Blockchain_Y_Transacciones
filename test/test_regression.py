@@ -3,7 +3,7 @@ Tests de regresión para endpoints existentes.
 
 Documenta la sección 6 del TRANSACTION_DETAIL_HANDOFF.md:
 - GET /health debe seguir respondiendo {"status": "ok"}.
-- GET /api/transaction/pending debe seguir listando transacciones pendientes.
+- GET /api/transactions/pending debe seguir listando transacciones pendientes.
 
 Nota: POST /api/transactions/ y GET /api/chain requieren mocks más complejos
 (ExternalWalletService, BlockService con DB real) y quedan fuera del alcance
@@ -33,7 +33,7 @@ class TestHealthEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/transaction/pending — Listar pendientes
+# GET /api/transactions/pending — Listar pendientes
 # ---------------------------------------------------------------------------
 
 
@@ -41,10 +41,10 @@ class TestPendingTransactionsEndpoint:
     """El endpoint de transacciones pendientes no debe romperse."""
 
     def test_pending_returns_200(self, test_client, mock_transaction_service):
-        """GET /api/transaction/pending debe retornar 200."""
+        """GET /api/transactions/pending debe retornar 200."""
         mock_transaction_service.get_pending_transactions = lambda: []
 
-        response = test_client.get("/api/transaction/pending")
+        response = test_client.get("/api/transactions/pending")
 
         assert response.status_code == 200
 
@@ -52,7 +52,7 @@ class TestPendingTransactionsEndpoint:
         """Debe retornar {"status": "ok", "data": [...]}."""
         mock_transaction_service.get_pending_transactions = lambda: []
 
-        response = test_client.get("/api/transaction/pending")
+        response = test_client.get("/api/transactions/pending")
         body = response.json()
 
         assert body["status"] == "ok"
@@ -70,7 +70,7 @@ class TestPendingTransactionsEndpoint:
             }
         ]
 
-        response = test_client.get("/api/transaction/pending")
+        response = test_client.get("/api/transactions/pending")
         body = response.json()
 
         assert len(body["data"]) == 1
@@ -89,13 +89,13 @@ class TestRoutingNotBroken:
         self, test_client, mock_transaction_service
     ):
         """
-        La ruta /api/transaction/pending NO debe interpretarse como
-        /api/transaction/{transaction_id} con transaction_id='pending'.
+        La ruta /api/transactions/pending NO debe interpretarse como
+        /api/transactions/{transaction_id} con transaction_id='pending'.
         Debe seguir retornando la lista de pendientes.
         """
         mock_transaction_service.get_pending_transactions = lambda: []
 
-        response = test_client.get("/api/transaction/pending")
+        response = test_client.get("/api/transactions/pending")
         body = response.json()
 
         # Si se interpretó como /{transaction_id}, retornaría un 404 o un objeto

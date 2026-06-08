@@ -96,14 +96,10 @@ def test_app():
     app = FastAPI(title="UFROCoin Test App")
 
     from src.api.global_router import router as global_router
-    from src.api.transaction_router import (
-        pending_router,
-        router as transaction_router,
-    )
+    from src.api.transaction_router import router as transaction_router
 
     app.include_router(global_router)
     app.include_router(transaction_router, prefix="/api")
-    app.include_router(pending_router, prefix="/api")
 
     return app
 

@@ -1,5 +1,5 @@
 """
-Tests de integración HTTP para el endpoint GET /api/transaction/{transaction_id}.
+Tests de integración HTTP para el endpoint GET /api/transactions/{transaction_id}.
 
 Cubren los escenarios del TRANSACTION_DETAIL_HANDOFF.md § 3:
 - Respuesta 200 con transacción pendiente.
@@ -13,7 +13,7 @@ from conftest import VALID_OBJECT_ID, NONEXISTENT_OBJECT_ID
 
 
 # ---------------------------------------------------------------------------
-# GET /api/transaction/{id} — 200 Transacción pendiente
+# GET /api/transactions/{id} — 200 Transacción pendiente
 # ---------------------------------------------------------------------------
 
 
@@ -33,7 +33,7 @@ class TestGetTransactionEndpoint200Pending:
             "block_index": None,
         }
 
-        response = test_client.get(f"/api/transaction/{VALID_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{VALID_OBJECT_ID}")
 
         assert response.status_code == 200
 
@@ -50,7 +50,7 @@ class TestGetTransactionEndpoint200Pending:
             "block_index": None,
         }
 
-        response = test_client.get(f"/api/transaction/{VALID_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{VALID_OBJECT_ID}")
         body = response.json()
 
         assert body["status"] == "ok"
@@ -69,7 +69,7 @@ class TestGetTransactionEndpoint200Pending:
             "block_index": None,
         }
 
-        response = test_client.get(f"/api/transaction/{VALID_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{VALID_OBJECT_ID}")
         data = response.json()["data"]
 
         assert data["status"] == "PENDING"
@@ -77,7 +77,7 @@ class TestGetTransactionEndpoint200Pending:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/transaction/{id} — 200 Transacción confirmada
+# GET /api/transactions/{id} — 200 Transacción confirmada
 # ---------------------------------------------------------------------------
 
 
@@ -99,7 +99,7 @@ class TestGetTransactionEndpoint200Confirmed:
             "block_index": 3,
         }
 
-        response = test_client.get(f"/api/transaction/{VALID_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{VALID_OBJECT_ID}")
 
         assert response.status_code == 200
         data = response.json()["data"]
@@ -108,7 +108,7 @@ class TestGetTransactionEndpoint200Confirmed:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/transaction/{id} — 404 No encontrada
+# GET /api/transactions/{id} — 404 No encontrada
 # ---------------------------------------------------------------------------
 
 
@@ -119,7 +119,7 @@ class TestGetTransactionEndpoint404:
         """Debe responder con status 404."""
         mock_transaction_service.get_transaction_by_id = lambda _: None
 
-        response = test_client.get(f"/api/transaction/{NONEXISTENT_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{NONEXISTENT_OBJECT_ID}")
 
         assert response.status_code == 404
 
@@ -127,7 +127,7 @@ class TestGetTransactionEndpoint404:
         """Debe retornar {status: 'error', code: 'TRANSACTION_NOT_FOUND', message: ...}."""
         mock_transaction_service.get_transaction_by_id = lambda _: None
 
-        response = test_client.get(f"/api/transaction/{NONEXISTENT_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{NONEXISTENT_OBJECT_ID}")
         body = response.json()
 
         assert body["status"] == "error"
@@ -158,7 +158,7 @@ class TestResponseContainsAllFields:
             "block_index": None,
         }
 
-        response = test_client.get(f"/api/transaction/{VALID_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{VALID_OBJECT_ID}")
         data = response.json()["data"]
 
         assert set(data.keys()) == self.EXPECTED_FIELDS
@@ -185,7 +185,7 @@ class TestResponseUsesAliases:
             "block_index": None,
         }
 
-        response = test_client.get(f"/api/transaction/{VALID_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{VALID_OBJECT_ID}")
         data = response.json()["data"]
 
         assert "from" in data
@@ -204,7 +204,7 @@ class TestResponseUsesAliases:
             "block_index": None,
         }
 
-        response = test_client.get(f"/api/transaction/{VALID_OBJECT_ID}")
+        response = test_client.get(f"/api/transactions/{VALID_OBJECT_ID}")
         data = response.json()["data"]
 
         assert "to" in data
