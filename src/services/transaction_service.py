@@ -112,6 +112,50 @@ class TransactionService:
             }
             for tx in pending_txs
         ]
+
+    def get_transaction_by_id(self, transaction_id: str) -> dict | None:
+        """Busca una transacción por su ID en el mempool y en los bloques confirmados."""
+        from bson import ObjectId
+        from bson.errors import InvalidId
+
+        # 1. Buscar en el mempool (colección transacciones)
+        try:
+            obj_id = ObjectId(transaction_id)
+        except (InvalidId, Exception):
+            obj_id = None
+
+        if obj_id is not None:
+            tx = self.db.transacciones.find_one({"_id": obj_id})
+            if tx is not None:
+                return {
+                    "id": str(tx["_id"]),
+                    "from": tx.get("from"),
+                    "to": tx.get("to"),
+                    "amount": tx.get("amount"),
+                    "type": tx.get("type", "TRANSFER"),
+                    "status": tx.get("status", "PENDING"),
+                    "timestamp": tx.get("timestamp"),
+                    "block_index": tx.get("block_index"),
+                }
+
+        # 2. Buscar en las transacciones dentro de los bloques confirmados
+        blocks = self.db.blocks.find()
+        for block in blocks:
+            for tx in block.get("transactions", []):
+                tx_id = tx.get("id") or str(tx.get("_id", ""))
+                if tx_id == transaction_id:
+                    return {
+                        "id": tx_id,
+                        "from": tx.get("from"),
+                        "to": tx.get("to"),
+                        "amount": tx.get("amount"),
+                        "type": tx.get("type", "TRANSFER"),
+                        "status": "CONFIRMED",
+                        "timestamp": tx.get("timestamp"),
+                        "block_index": block.get("index"),
+                    }
+
+        return None
     
     #--- Historial de Transacciones ---
 
