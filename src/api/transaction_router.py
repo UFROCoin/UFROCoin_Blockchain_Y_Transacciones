@@ -110,7 +110,7 @@ async def get_pending_transactions(
 # ---------------------------------------------------------------------------
 
 
-@pending_router.get(
+@router.get(
     "/{transaction_id}",
     response_model=TransactionDetailResponse,
     response_model_by_alias=True,
