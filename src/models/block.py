@@ -256,6 +256,54 @@ class ChainValidationSuccessResponse(BaseModel):
     )
 
 
+# ---------------------------------------------------------------------------
+# Modelos para GET /api/chain/stats (US — estadísticas de la cadena)
+# ---------------------------------------------------------------------------
+
+
+class ChainStatsData(BaseModel):
+    """Payload con estadísticas en tiempo real de la blockchain."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total_blocks: int = Field(
+        ...,
+        description="Cantidad total de bloques en la cadena.",
+        examples=[42],
+    )
+    last_block_time: str | None = Field(
+        ...,
+        description="Timestamp ISO 8601 del último bloque, o null si la cadena está vacía.",
+        examples=["2026-05-31T20:00:00Z"],
+    )
+    total_transactions: int = Field(
+        ...,
+        description="Suma total de transacciones incluidas en todos los bloques.",
+        examples=[138],
+    )
+    total_ufrocoins_emitidos: float = Field(
+        ...,
+        description="Suma total de UFROCoins emitidos (campos 'amount' de todas las transacciones).",
+        examples=[5000.0],
+    )
+
+
+class ChainStatsResponse(BaseModel):
+    """Respuesta estándar del endpoint GET /api/chain/stats."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["ok"] = Field(
+        ...,
+        description="Estado de la solicitud.",
+        examples=["ok"],
+    )
+    data: ChainStatsData = Field(
+        ...,
+        description="Estadísticas calculadas en tiempo real recorriendo la cadena.",
+    )
+
+
 class ChainValidateResponse(BaseModel):
     """Respuesta mínima del endpoint GET /api/chain/validate.
 
