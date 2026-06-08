@@ -29,7 +29,7 @@ class TransactionService:
                 if tx.get("from") == address:
                     balance -= tx.get("amount", 0.0)
 
-        pending_txs = self.dpending_txs = self.db.transacciones.find({"from": address, "status": "PENDING"})
+        pending_txs = self.db.transacciones.find({"from": address, "status": "PENDING"})
         for tx in pending_txs:
             balance -= tx.get("amount", 0.0)
 
@@ -38,21 +38,45 @@ class TransactionService:
     # --- Gestión de Transferencias ---
 
     def create_transfer(self, transaction_data: dict) -> dict:
+        amount = transaction_data.get("amount", 0.0)
+
+        # Validación de monto
+        if amount <= 0:
+            raise ValueError("El monto de la transacción debe ser mayor a cero")
+        
+        # Validación de decimales
+        if "." in str(amount) and len(str(amount).split(".")[1]) > 2:
+            raise ValueError("El monto de la transacción no puede tener más de 2 decimales")
+        
+        # Validación de existencia de wallets
+        if not self.wallet_service.check_wallet_exist(transaction_data.get("from")):
+            raise ValueError("La wallet de origen es invalida o no existe")
+        
+        # Validación de existencia de wallet destino
         if not self.wallet_service.check_wallet_exist(transaction_data.get("to")):
             raise ValueError("La wallet de destino es invalida o no existe")
         
+        # Validación de transacciones pendientes
+        from_address = transaction_data.get("from")
+        pending_count = self.db.transacciones.count_documents({"from": from_address, "status": "PENDING"})
+        if pending_count >= 10:
+            raise ValueError("No se pueden crear más de 10 transacciones pendientes para la misma wallet de origen")
+        
+        # Validación de saldo suficiente
         if transaction_data.get("type") == "TRANSFER":
             current_balance = self.calculate_balance(transaction_data.get("from"))
             if current_balance < transaction_data.get("amount"):
                 raise ValueError(f"Saldo insuficiente. Saldo disponible: {current_balance}")
-
-
+            
+        # --- Creación de transacción ---
         new_transaction = Transaction(**transaction_data)
         transaction_dict = new_transaction.model_dump(by_alias=True)
         
+        # Guardar transacción en la base de datos
         result = self.db.transacciones.insert_one(transaction_dict)
         transaction_dict["_id"] = str(result.inserted_id)
 
+        # Publicar evento de transacción creada
         try:
             self.publisher.publish_transaction(
                 {
@@ -94,12 +118,13 @@ class TransactionService:
     def get_transaction_history(self, address: str) -> list:
         history = []
 
-        block = self.db.blocks.find()
-        for tx in block.geet("transactions", []):
-            if tx.get("from") == address or tx.get("to") == address:
-                tx_type = tx.get("type")
-                if tx_type == "TRANSFER":
-                    tx_type = "SEND" if tx.get("from") == address else "RECEIVE"
+        blocks = self.db.blocks.find()
+        for block in blocks:
+            for tx in block.get("transactions", []):
+                if tx.get("from") == address or tx.get("to") == address:
+                    tx_type = tx.get("type")
+                    if tx_type == "TRANSFER":
+                        tx_type = "SEND" if tx.get("from") == address else "RECEIVE"
                 
                 history.append({
                     "_id": str(tx.get("id", "")),
@@ -112,7 +137,7 @@ class TransactionService:
                 })
 
         pending_txs = self.db.transacciones.find({
-            "$or": [{"from": addres}, {"to":address}]
+            "$or": [{"from": address}, {"to": address}]
         })
         for tx in pending_txs:
             tx_type = tx.get("type")
