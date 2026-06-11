@@ -9,6 +9,8 @@ from src.models.block import (
     BlockValidationData,
     BlockValidationRequest,
     BlockValidationSuccessResponse,
+    ChainStatsData,
+    ChainStatsResponse,
     ChainSuccessResponse,
     ChainValidateResponse,
     ChainValidationData,
@@ -189,6 +191,38 @@ async def get_chain(
         data=blocks,
         error=None,
     ).model_dump(by_alias=True)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/chain/stats — Estadísticas en tiempo real de la cadena (US)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/chain/stats",
+    response_model=ChainStatsResponse,
+    summary="Estadísticas en tiempo real de la cadena de bloques",
+    description=(
+        "Recorre toda la blockchain y retorna el número total de bloques, "
+        "el timestamp del último bloque, la cantidad total de transacciones "
+        "y la suma total de UFROCoins emitidos. "
+        "Endpoint público — no requiere JWT."
+    ),
+)
+async def get_chain_stats(
+    block_service: BlockService = Depends(get_block_service),
+):
+    stats = block_service.get_chain_stats()
+
+    return ChainStatsResponse(
+        status="ok",
+        data=ChainStatsData(
+            total_blocks=stats["total_blocks"],
+            last_block_time=stats["last_block_time"],
+            total_transactions=stats["total_transactions"],
+            total_ufrocoins_emitidos=stats["total_ufrocoins_emitidos"],
+        ),
+    ).model_dump()
 
 
 # ---------------------------------------------------------------------------

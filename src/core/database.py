@@ -6,6 +6,9 @@ from typing import Any
 
 DEFAULT_MONGO_URI = "mongodb://localhost:27017/"
 DEFAULT_DATABASE_NAME = "ufrocoin"
+DEFAULT_BLOCKS_COLLECTION_NAME = "blocks"
+DEFAULT_TRANSACTIONS_COLLECTION_NAME = "transactions"
+DEFAULT_CHAIN_METADATA_COLLECTION_NAME = "chain_metadata"
 
 _mongo_client: Any | None = None
 _database: Any | None = None
@@ -105,16 +108,28 @@ def get_database() -> Any:
     return _database
 
 
+def get_blocks_collection_name() -> str:
+    return os.getenv("MONGO_BLOCKS_COLLECTION", DEFAULT_BLOCKS_COLLECTION_NAME)
+
+
+def get_transactions_collection_name() -> str:
+    return os.getenv("MONGO_TRANSACTIONS_COLLECTION", DEFAULT_TRANSACTIONS_COLLECTION_NAME)
+
+
+def get_chain_metadata_collection_name() -> str:
+    return os.getenv("MONGO_CHAIN_METADATA_COLLECTION", DEFAULT_CHAIN_METADATA_COLLECTION_NAME)
+
+
 def get_blocks_collection() -> Any:
-    return get_database()["blocks"]
+    return get_database()[get_blocks_collection_name()]
 
 
 def get_transactions_collection() -> Any:
-    return get_database()["transactions"]
+    return get_database()[get_transactions_collection_name()]
 
 
 def get_chain_metadata_collection() -> Any:
-    return get_database()["chain_metadata"]
+    return get_database()[get_chain_metadata_collection_name()]
 
 
 def initialize_database() -> None:
@@ -131,6 +146,7 @@ def initialize_database() -> None:
     get_mongo_client().admin.command("ping")
 
     blocks = get_blocks_collection()
+    transactions = get_transactions_collection()
 
     blocks.create_index(
         [("index", pymongo.ASCENDING)],
@@ -147,6 +163,26 @@ def initialize_database() -> None:
     blocks.create_index(
         [("index", pymongo.DESCENDING)],
         name="blocks_index_desc",
+    )
+
+    transactions.create_index(
+        [("status", pymongo.ASCENDING)],
+        name="transactions_status",
+    )
+
+    transactions.create_index(
+        [("from", pymongo.ASCENDING), ("status", pymongo.ASCENDING)],
+        name="transactions_from_status",
+    )
+
+    transactions.create_index(
+        [("to", pymongo.ASCENDING)],
+        name="transactions_to",
+    )
+
+    transactions.create_index(
+        [("timestamp", pymongo.DESCENDING)],
+        name="transactions_timestamp_desc",
     )
 
 

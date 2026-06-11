@@ -1,17 +1,17 @@
-from src.core.database import get_db_client
+from src.core.database import get_blocks_collection, get_transactions_collection
 
 # --- Logica de Historial ---
 
 def get_wallet_history(address: str, page: int = 1, limit: int = 10) -> list[dict]:
-    client = get_db_client()
-    db = client.get_database("blockchain_db")
-    
+    transactions_collection = get_transactions_collection()
+    blocks_collection = get_blocks_collection()
+
     history = []
     skip = (page - 1) * limit
     
     query = {"$or": [{"from": address}, {"to": address}]}
     
-    pending_cursor = db.transacciones.find(query)
+    pending_cursor = transactions_collection.find(query)
     
     for tx in pending_cursor:
         tx["_id"] = str(tx["_id"])
@@ -19,7 +19,7 @@ def get_wallet_history(address: str, page: int = 1, limit: int = 10) -> list[dic
             tx["status"] = "PENDING"
         history.append(tx)
         
-    blocks_cursor = db.blocks.find({
+    blocks_cursor = blocks_collection.find({
         "transactions": {
             "$elemMatch": {
                 "$or": [{"from": address}, {"to": address}]
