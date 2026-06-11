@@ -89,7 +89,7 @@ class TransactionDetail(BaseModel):
 
 
 class TransactionDetailResponse(BaseModel):
-    """Respuesta estándar del endpoint GET /api/transaction/{id}."""
+    """Respuesta estándar del endpoint GET /api/transactions/{id}."""
 
     status: Literal["ok"] = Field(
         ...,

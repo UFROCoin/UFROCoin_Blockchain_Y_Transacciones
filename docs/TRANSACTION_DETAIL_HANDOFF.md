@@ -18,10 +18,10 @@ Este archivo documenta la implementación de la consulta de detalle de una trans
 
 ### Alcance implementado
 
-- Endpoint público `GET /api/transaction/{id}` que retorna todos los campos de una transacción.
+- Endpoint público `GET /api/transactions/{id}` que retorna todos los campos de una transacción.
 - Incluye el `block_index` del bloque en que fue confirmada (si aplica).
 - Si la transacción no existe, retorna `404` con código `TRANSACTION_NOT_FOUND`.
-- Búsqueda en dos fases: primero en el mempool (colección `transacciones`), luego en las transacciones embebidas dentro de los bloques confirmados.
+- Búsqueda en dos fases: primero en el mempool (colección `transactions`), luego en las transacciones embebidas dentro de los bloques confirmados.
 - Documentación completa con FastAPI (summary, description, response examples, Path descriptions).
 
 ### Fuera de alcance
@@ -34,7 +34,7 @@ Este archivo documenta la implementación de la consulta de detalle de una trans
 
 ## 3. Endpoint
 
-`GET /api/transaction/{transaction_id}`
+`GET /api/transactions/{transaction_id}`
 
 ## Respuesta Exitosa
 
@@ -79,10 +79,10 @@ Status: `404`.
   - `TransactionDetailResponse`: Wrapper de respuesta `{"status": "ok", "data": TransactionDetail}`.
 
 - `src/services/transaction_service.py`
-  - `get_transaction_by_id(transaction_id)`: Busca primero en la colección `transacciones` por `_id` (ObjectId), luego recorre las transacciones dentro de los bloques. Si la encuentra en un bloque, asigna `status="CONFIRMED"` y `block_index` del bloque contenedor. Retorna `None` si no existe.
+  - `get_transaction_by_id(transaction_id)`: Busca primero en la colección `transactions` por `_id` (ObjectId), luego recorre las transacciones dentro de los bloques. Si la encuentra en un bloque, asigna `status="CONFIRMED"` y `block_index` del bloque contenedor. Retorna `None` si no existe.
 
 - `src/api/transaction_router.py`
-  - Define `GET /{transaction_id}` en el `pending_router` (prefijo `/transaction`), resultando en la ruta completa `/api/transaction/{transaction_id}`.
+  - Define `GET /{transaction_id}` en el router con prefijo `/transactions`, resultando en la ruta completa `/api/transactions/{transaction_id}`.
   - Usa `JSONResponse` con `TRANSACTION_NOT_FOUND` cuando el servicio retorna `None`.
   - Documenta la respuesta 404 con el modelo `ApiErrorResponse` (reutilizado de `src/models/block.py`).
 
@@ -94,8 +94,8 @@ Status: `404`.
 2. Ejecutar API: `python -m uvicorn src.main:app --reload`.
 3. Crear una transacción: `POST http://127.0.0.1:8000/api/transactions/`.
 4. Copiar el `_id` de la respuesta.
-5. Consultar por ID: `GET http://127.0.0.1:8000/api/transaction/{id}`.
-6. Probar ID inexistente: `GET http://127.0.0.1:8000/api/transaction/000000000000000000000000`.
+5. Consultar por ID: `GET http://127.0.0.1:8000/api/transactions/{id}`.
+6. Probar ID inexistente: `GET http://127.0.0.1:8000/api/transactions/000000000000000000000000`.
 7. Verificar documentación Swagger: `http://127.0.0.1:8000/docs`.
 
 ---
@@ -104,7 +104,7 @@ Status: `404`.
 
 - `GET /health` debe seguir respondiendo `{"status":"ok"}`.
 - `POST /api/transactions/` debe conservar el contrato de creación.
-- `GET /api/transaction/pending` debe seguir listando transacciones pendientes.
+- `GET /api/transactions/pending` debe seguir listando transacciones pendientes.
 - `GET /api/chain` debe seguir retornando la cadena paginada.
 
 ---
@@ -118,4 +118,4 @@ Status: `404`.
 
 ## 8. Orden de commits recomendado
 
-1. `feat(transactions): implement GET /api/transaction/{id} for transaction detail lookup`
+1. `feat(transactions): implement GET /api/transactions/{id} for transaction detail lookup`

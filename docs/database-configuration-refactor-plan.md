@@ -1,5 +1,18 @@
 # Plan de Refactor: Configuracion Centralizada de Base de Datos y Colecciones
 
+## Estado Actual
+
+Implementado con contrato de endpoints existente:
+
+- Base de datos por defecto: `ufrocoin`
+- Coleccion de bloques: `blocks`
+- Coleccion de transacciones: `transactions`
+- Coleccion de metadata de cadena: `chain_metadata`
+- Endpoint de pendientes: `GET /api/transactions/pending`
+- Endpoint de detalle: `GET /api/transactions/{transaction_id}`
+
+Las referencias historicas a `blockchain_db.transacciones` o `/api/transaction/*` en este documento describen el problema original o alternativas de rollback, no el contrato activo recomendado.
+
 ## Objetivo
 
 Centralizar la configuracion de la base de datos MongoDB y los nombres de colecciones en un unico punto del proyecto, usando variables de entorno con valores por defecto seguros.

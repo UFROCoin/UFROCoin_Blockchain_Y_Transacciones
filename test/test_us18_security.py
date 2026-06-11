@@ -6,7 +6,17 @@ from src.services.transaction_service import TransactionService
 
 @pytest.fixture
 def mock_db():
-    return MagicMock()
+    client = MagicMock()
+    db = MagicMock()
+    db.transactions = MagicMock()
+    db.blocks = MagicMock()
+    db.blocks.find.return_value = []
+    db.__getitem__.side_effect = {
+        "transactions": db.transactions,
+        "blocks": db.blocks,
+    }.__getitem__
+    client.__getitem__.return_value = db
+    return client
 
 @pytest.fixture
 def service(mock_db):
@@ -17,11 +27,11 @@ def service(mock_db):
         svc.wallet_service = mock_wallet.return_value
         
         svc.wallet_service.check_wallet_exist.return_value = True
-        svc.db.transacciones.count_documents.return_value = 0
+        svc.transactions_collection.count_documents.return_value = 0
         
         mock_insert_result = MagicMock()
         mock_insert_result.inserted_id = "mock_tx_123"
-        svc.db.transacciones.insert_one.return_value = mock_insert_result
+        svc.transactions_collection.insert_one.return_value = mock_insert_result
         
         return svc
 
@@ -74,7 +84,7 @@ def test_wallet_destino_no_existe(service):
 
 def test_limite_transacciones_pendientes_superado(service):
     tx_data = get_base_tx_data()
-    service.db.transacciones.count_documents.return_value = 10
+    service.transactions_collection.count_documents.return_value = 10
     
     # Texto actualizado
     with pytest.raises(ValueError, match="No se pueden crear más de 10 transacciones pendientes para la misma wallet de origen"):
@@ -88,4 +98,4 @@ def test_transaccion_exitosa_cumple_reglas(service):
     
     assert resultado["_id"] == "mock_tx_123"
     assert resultado["amount"] == 10.0
-    assert service.db.transacciones.insert_one.called
+    assert service.transactions_collection.insert_one.called

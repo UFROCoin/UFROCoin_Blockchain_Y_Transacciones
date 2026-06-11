@@ -2,6 +2,11 @@ from datetime import datetime, timezone
 import logging
 
 from src.core.constants import TRANSACTION_EVENT_ROUTING_KEY
+from src.core.database import (
+    get_blocks_collection_name,
+    get_database_name,
+    get_transactions_collection_name,
+)
 from src.models.transaction import Transaction
 from src.core.rabbitmq_publisher import RabbitMQPublisher
 from src.services.external_wallet_service import ExternalWalletService
@@ -12,7 +17,9 @@ LOGGER = logging.getLogger(__name__)
 
 class TransactionService:
     def __init__(self, db_client):
-        self.db = db_client.blockchain_db
+        database = db_client[get_database_name()]
+        self.blocks_collection = database[get_blocks_collection_name()]
+        self.transactions_collection = database[get_transactions_collection_name()]
         self.publisher = RabbitMQPublisher()
         self.wallet_service = ExternalWalletService()
     
@@ -21,15 +28,17 @@ class TransactionService:
     def calculate_balance(self, address: str) -> float:
         balance = 0.0
 
-        blocks = self.db.blocks.find()
+        blocks = self.blocks_collection.find()
         for block in blocks:
             for tx in block.get("transactions", []):
-                if tx.get("to") == address:
+                tx_to = tx.get("to") or tx.get("to_address")
+                tx_from = tx.get("from") or tx.get("from_address")
+                if tx_to == address:
                     balance += tx.get("amount", 0.0)
-                if tx.get("from") == address:
+                if tx_from == address:
                     balance -= tx.get("amount", 0.0)
 
-        pending_txs = self.db.transacciones.find({"from": address, "status": "PENDING"})
+        pending_txs = self.transactions_collection.find({"from": address, "status": "PENDING"})
         for tx in pending_txs:
             balance -= tx.get("amount", 0.0)
 
@@ -58,7 +67,7 @@ class TransactionService:
         
         # Validación de transacciones pendientes
         from_address = transaction_data.get("from")
-        pending_count = self.db.transacciones.count_documents({"from": from_address, "status": "PENDING"})
+        pending_count = self.transactions_collection.count_documents({"from": from_address, "status": "PENDING"})
         if pending_count >= 10:
             raise ValueError("No se pueden crear más de 10 transacciones pendientes para la misma wallet de origen")
         
@@ -73,7 +82,7 @@ class TransactionService:
         transaction_dict = new_transaction.model_dump(by_alias=True)
         
         # Guardar transacción en la base de datos
-        result = self.db.transacciones.insert_one(transaction_dict)
+        result = self.transactions_collection.insert_one(transaction_dict)
         transaction_dict["_id"] = str(result.inserted_id)
 
         # Publicar evento de transacción creada
@@ -100,7 +109,7 @@ class TransactionService:
         return transaction_dict
 
     def get_pending_transactions(self) -> list[dict]:
-        pending_txs = self.db.transacciones.find({"status": "PENDING"})
+        pending_txs = self.transactions_collection.find({"status": "PENDING"})
 
         return [
             {
@@ -118,14 +127,14 @@ class TransactionService:
         from bson import ObjectId
         from bson.errors import InvalidId
 
-        # 1. Buscar en el mempool (colección transacciones)
+        # 1. Buscar en el mempool (colección transactions)
         try:
             obj_id = ObjectId(transaction_id)
         except (InvalidId, Exception):
             obj_id = None
 
         if obj_id is not None:
-            tx = self.db.transacciones.find_one({"_id": obj_id})
+            tx = self.transactions_collection.find_one({"_id": obj_id})
             if tx is not None:
                 return {
                     "id": str(tx["_id"]),
@@ -139,7 +148,7 @@ class TransactionService:
                 }
 
         # 2. Buscar en las transacciones dentro de los bloques confirmados
-        blocks = self.db.blocks.find()
+        blocks = self.blocks_collection.find()
         for block in blocks:
             for tx in block.get("transactions", []):
                 tx_id = tx.get("id") or str(tx.get("_id", ""))
@@ -162,25 +171,25 @@ class TransactionService:
     def get_transaction_history(self, address: str) -> list:
         history = []
 
-        blocks = self.db.blocks.find()
+        blocks = self.blocks_collection.find()
         for block in blocks:
             for tx in block.get("transactions", []):
                 if tx.get("from") == address or tx.get("to") == address:
                     tx_type = tx.get("type")
                     if tx_type == "TRANSFER":
                         tx_type = "SEND" if tx.get("from") == address else "RECEIVE"
-                
-                history.append({
-                    "_id": str(tx.get("id", "")),
-                    "type": tx_type,
-                    "from": tx.get("from"),
-                    "to": tx.get("to"),
-                    "amount": float(tx.get("amount",0.00)),
-                    "timestamp": tx.get("timestamp"),
-                    "status": "CONFIRMED"
-                })
 
-        pending_txs = self.db.transacciones.find({
+                    history.append({
+                        "_id": str(tx.get("id", "")),
+                        "type": tx_type,
+                        "from": tx.get("from"),
+                        "to": tx.get("to"),
+                        "amount": float(tx.get("amount", 0.00)),
+                        "timestamp": tx.get("timestamp"),
+                        "status": "CONFIRMED"
+                    })
+
+        pending_txs = self.transactions_collection.find({
             "$or": [{"from": address}, {"to": address}]
         })
         for tx in pending_txs:

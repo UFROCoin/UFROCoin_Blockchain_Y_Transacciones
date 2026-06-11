@@ -9,11 +9,11 @@ Este archivo resume la implementación de la **US-14: Historial de Transacciones
 Se implementó un servicio unificado que recupera transacciones asociadas a una wallet (ya sea como emisor o receptor) desde el Módulo 2 de UFROCoin.
 
 ### Alcance Implementado
-- **Consulta Unificada**: Recuperación de transacciones desde la colección `transacciones` (pendientes) y `blocks` (confirmadas).
+- **Consulta Unificada**: Recuperación de transacciones desde la colección `transactions` (pendientes) y `blocks` (confirmadas).
 - **Paginación**: Soporte para parámetros `page` y `limit` para optimizar el consumo del cliente.
 - **Seguridad**: Validación de propiedad de la wallet mediante JWT con bypass de desarrollo (`test-token`).
 - **Ordenamiento**: Entrega cronológica descendente (más reciente primero).
-- **Integración MongoDB**: Conexión directa a la base de datos `blockchain_db`.
+- **Integración MongoDB**: Conexión mediante configuración centralizada de MongoDB.
 
 ### Fuera de Alcance
 - Filtros avanzados por fecha o tipo de transacción (se considerarán para futuras versiones).
@@ -62,4 +62,4 @@ La paginación se aplica sobre el conjunto total de resultados (Mempool + Blockc
 1. Abrir `http://localhost:8000/docs`.
 2. Autorizar con `test-token`.
 3. Ejecutar `GET /history/billetera_con_fondos?page=1&limit=5`.
-4. Verificar que se retornan los registros de la base de datos `blockchain_db`.
+4. Verificar que se retornan los registros de la base configurada por `MONGO_DB_NAME`.

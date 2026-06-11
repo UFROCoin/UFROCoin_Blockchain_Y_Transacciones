@@ -106,7 +106,7 @@ async def get_pending_transactions(
 
 
 # ---------------------------------------------------------------------------
-# GET /api/transaction/{transaction_id} — Consultar detalle de transacción
+# GET /api/transactions/{transaction_id} — Consultar detalle de transacción
 # ---------------------------------------------------------------------------
 
 

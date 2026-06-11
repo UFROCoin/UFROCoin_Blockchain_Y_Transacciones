@@ -2,7 +2,7 @@
 Tests unitarios para TransactionService.get_transaction_by_id.
 
 Cubren los escenarios documentados en TRANSACTION_DETAIL_HANDOFF.md § 2:
-- Transacción encontrada en el mempool (colección transacciones).
+- Transacción encontrada en el mempool (colección transactions).
 - Transacción encontrada dentro de un bloque confirmado.
 - Transacción no encontrada en ningún lado.
 - ID inválido (no es un ObjectId de MongoDB válido).
@@ -27,13 +27,13 @@ from conftest import (
 
 
 class TestGetTransactionFromMempool:
-    """Transacción encontrada en la colección `transacciones` (mempool)."""
+    """Transacción encontrada en la colección `transactions` (mempool)."""
 
     def test_returns_transaction_dict_when_found_in_mempool(
         self, mock_transaction_service, mock_db_client
     ):
         """Debe retornar un dict con los campos mapeados correctamente."""
-        mock_db_client.blockchain_db.transacciones.find_one.return_value = (
+        mock_db_client["ufrocoin"].transactions.find_one.return_value = (
             SAMPLE_PENDING_TX_DOC.copy()
         )
 
@@ -53,12 +53,12 @@ class TestGetTransactionFromMempool:
         self, mock_transaction_service, mock_db_client
     ):
         """Debe buscar en la colección con ObjectId, no con string."""
-        mock_db_client.blockchain_db.transacciones.find_one.return_value = None
-        mock_db_client.blockchain_db.blocks.find.return_value = []
+        mock_db_client["ufrocoin"].transactions.find_one.return_value = None
+        mock_db_client["ufrocoin"].blocks.find.return_value = []
 
         mock_transaction_service.get_transaction_by_id(VALID_OBJECT_ID)
 
-        call_args = mock_db_client.blockchain_db.transacciones.find_one.call_args
+        call_args = mock_db_client["ufrocoin"].transactions.find_one.call_args
         query_filter = call_args[0][0]
         assert isinstance(query_filter["_id"], ObjectId)
         assert str(query_filter["_id"]) == VALID_OBJECT_ID
@@ -77,9 +77,9 @@ class TestGetTransactionFromConfirmedBlock:
     ):
         """Debe retornar status=CONFIRMED y block_index del bloque contenedor."""
         # No está en mempool
-        mock_db_client.blockchain_db.transacciones.find_one.return_value = None
+        mock_db_client["ufrocoin"].transactions.find_one.return_value = None
         # Sí está en un bloque
-        mock_db_client.blockchain_db.blocks.find.return_value = [SAMPLE_BLOCK.copy()]
+        mock_db_client["ufrocoin"].blocks.find.return_value = [SAMPLE_BLOCK.copy()]
 
         result = mock_transaction_service.get_transaction_by_id(
             SAMPLE_CONFIRMED_TX_IN_BLOCK["id"]
@@ -95,15 +95,15 @@ class TestGetTransactionFromConfirmedBlock:
         self, mock_transaction_service, mock_db_client
     ):
         """Debe iterar sobre los bloques si la transacción no está en mempool."""
-        mock_db_client.blockchain_db.transacciones.find_one.return_value = None
-        mock_db_client.blockchain_db.blocks.find.return_value = [SAMPLE_BLOCK.copy()]
+        mock_db_client["ufrocoin"].transactions.find_one.return_value = None
+        mock_db_client["ufrocoin"].blocks.find.return_value = [SAMPLE_BLOCK.copy()]
 
         mock_transaction_service.get_transaction_by_id(
             SAMPLE_CONFIRMED_TX_IN_BLOCK["id"]
         )
 
         # Verifica que se consultaron los bloques
-        mock_db_client.blockchain_db.blocks.find.assert_called_once()
+        mock_db_client["ufrocoin"].blocks.find.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -118,8 +118,8 @@ class TestGetTransactionNotFound:
         self, mock_transaction_service, mock_db_client
     ):
         """Debe retornar None si la transacción no existe en ningún lado."""
-        mock_db_client.blockchain_db.transacciones.find_one.return_value = None
-        mock_db_client.blockchain_db.blocks.find.return_value = []
+        mock_db_client["ufrocoin"].transactions.find_one.return_value = None
+        mock_db_client["ufrocoin"].blocks.find.return_value = []
 
         result = mock_transaction_service.get_transaction_by_id(NONEXISTENT_OBJECT_ID)
 
@@ -129,13 +129,13 @@ class TestGetTransactionNotFound:
         self, mock_transaction_service, mock_db_client
     ):
         """Debe retornar None si hay bloques pero ninguno contiene el ID buscado."""
-        mock_db_client.blockchain_db.transacciones.find_one.return_value = None
+        mock_db_client["ufrocoin"].transactions.find_one.return_value = None
 
         block_with_other_tx = {
             "index": 1,
             "transactions": [{"id": "otro_id_diferente", "from": "x", "to": "y", "amount": 10}],
         }
-        mock_db_client.blockchain_db.blocks.find.return_value = [block_with_other_tx]
+        mock_db_client["ufrocoin"].blocks.find.return_value = [block_with_other_tx]
 
         result = mock_transaction_service.get_transaction_by_id(NONEXISTENT_OBJECT_ID)
 
@@ -154,7 +154,7 @@ class TestGetTransactionInvalidId:
         self, mock_transaction_service, mock_db_client
     ):
         """No debe lanzar excepción con un ID inválido; simplemente busca en bloques."""
-        mock_db_client.blockchain_db.blocks.find.return_value = []
+        mock_db_client["ufrocoin"].blocks.find.return_value = []
 
         # No debería lanzar excepción
         result = mock_transaction_service.get_transaction_by_id("esto-no-es-objectid")
@@ -165,22 +165,22 @@ class TestGetTransactionInvalidId:
         self, mock_transaction_service, mock_db_client
     ):
         """Con un ID inválido no debe intentar consultar mempool con ObjectId."""
-        mock_db_client.blockchain_db.blocks.find.return_value = []
+        mock_db_client["ufrocoin"].blocks.find.return_value = []
 
         mock_transaction_service.get_transaction_by_id("not-valid!")
 
         # find_one NO debe haberse llamado porque el ObjectId fue inválido
-        mock_db_client.blockchain_db.transacciones.find_one.assert_not_called()
+        mock_db_client["ufrocoin"].transactions.find_one.assert_not_called()
 
     def test_invalid_id_still_searches_blocks(
         self, mock_transaction_service, mock_db_client
     ):
         """Con ID inválido debe buscar igualmente en bloques por coincidencia de string."""
-        mock_db_client.blockchain_db.blocks.find.return_value = []
+        mock_db_client["ufrocoin"].blocks.find.return_value = []
 
         mock_transaction_service.get_transaction_by_id("invalid-but-search-blocks")
 
-        mock_db_client.blockchain_db.blocks.find.assert_called_once()
+        mock_db_client["ufrocoin"].blocks.find.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +195,7 @@ class TestMempoolPriority:
         self, mock_transaction_service, mock_db_client
     ):
         """Si la transacción se encuentra en mempool, retorna esa sin buscar en bloques."""
-        mock_db_client.blockchain_db.transacciones.find_one.return_value = (
+        mock_db_client["ufrocoin"].transactions.find_one.return_value = (
             SAMPLE_PENDING_TX_DOC.copy()
         )
 
@@ -204,4 +204,27 @@ class TestMempoolPriority:
         assert result is not None
         assert result["status"] == "PENDING"
         # No se deben haber consultado los bloques
-        mock_db_client.blockchain_db.blocks.find.assert_not_called()
+        mock_db_client["ufrocoin"].blocks.find.assert_not_called()
+
+
+class TestCalculateBalance:
+    """Cálculo de saldo usando transacciones confirmadas y pendientes."""
+
+    def test_counts_genesis_address_fields(self, mock_transaction_service, mock_db_client):
+        """Debe considerar transacciones históricas con from_address/to_address."""
+        mock_db_client["ufrocoin"].blocks.find.return_value = [
+            {
+                "transactions": [
+                    {
+                        "from_address": "SYSTEM",
+                        "to_address": "REWARD_POOL",
+                        "amount": 1000000.0,
+                    }
+                ]
+            }
+        ]
+        mock_db_client["ufrocoin"].transactions.find.return_value = []
+
+        result = mock_transaction_service.calculate_balance("REWARD_POOL")
+
+        assert result == 1000000.0

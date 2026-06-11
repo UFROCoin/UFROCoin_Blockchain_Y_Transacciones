@@ -11,10 +11,14 @@ Estrategia:
 from unittest.mock import MagicMock
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from src.main import app
+from src.api.block_router import router as block_router
 from src.api.block_router import get_block_service
+
+app = FastAPI(title="UFROCoin Chain Stats Test App")
+app.include_router(block_router, prefix="/api")
 
 # ---------------------------------------------------------------------------
 # Datos de estadísticas de prueba

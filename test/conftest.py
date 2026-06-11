@@ -2,7 +2,7 @@
 Fixtures compartidas para los tests del proyecto UFROCoin.
 
 Provee:
-- Mock del cliente MongoDB (colecciones transacciones y blocks).
+- Mock del cliente MongoDB (colecciones transactions y blocks).
 - TransactionService instanciado con mocks (sin dependencias externas).
 - TestClient de FastAPI con dependency override para aislar tests de infra.
 - Datos de ejemplo reutilizables (transacción pendiente, bloque confirmado, etc.).
@@ -57,19 +57,25 @@ SAMPLE_BLOCK = {
 
 @pytest.fixture()
 def mock_db_client():
-    """Cliente MongoDB falso con colecciones transacciones y blocks."""
+    """Cliente MongoDB falso con colecciones transactions y blocks."""
     client = MagicMock()
     db = MagicMock()
-    client.blockchain_db = db
+    client.__getitem__.return_value = db
 
-    # Colección transacciones (mempool)
-    db.transacciones = MagicMock()
-    db.transacciones.find_one.return_value = None
-    db.transacciones.find.return_value = []
+    # Colección transactions (mempool)
+    db.transactions = MagicMock()
+    db.transactions.find_one.return_value = None
+    db.transactions.find.return_value = []
 
     # Colección blocks
     db.blocks = MagicMock()
     db.blocks.find.return_value = []
+
+    db.__getitem__.side_effect = {
+        "transactions": db.transactions,
+        "blocks": db.blocks,
+        "chain_metadata": MagicMock(),
+    }.__getitem__
 
     return client
 
