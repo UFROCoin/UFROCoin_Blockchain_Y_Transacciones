@@ -1,0 +1,21 @@
+[run]
+branch = True
+source = src
+omit =
+    */__init__.py
+    test/*
+    */test/*
+    */tests/*
+    .venv/*
+
+[report]
+show_missing = True
+skip_empty = True
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    if __name__ == .__main__.:
+    raise NotImplementedError
+
+[html]
+directory = htmlcov
