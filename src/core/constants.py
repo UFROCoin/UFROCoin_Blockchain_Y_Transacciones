@@ -8,3 +8,15 @@ CHAIN_METADATA_ID = "chain_state"
 BLOCKCHAIN_EVENTS_EXCHANGE = "ufrocoin.blockchain.events"
 GENESIS_EVENT_ROUTING_KEY = "genesis.created"
 TRANSACTION_EVENT_ROUTING_KEY = "transaction.created"
+
+# ---------------------------------------------------------------------------
+# Checkpoints
+# ---------------------------------------------------------------------------
+
+# Frecuencia por defecto: se genera un checkpoint cada 100 bloques.
+# Sobreescribible con la variable de entorno CHECKPOINT_FREQUENCY.
+DEFAULT_CHECKPOINT_FREQUENCY = 100
+
+# Nombre por defecto de la colección MongoDB para checkpoints.
+# Sobreescribible con la variable de entorno MONGO_CHECKPOINTS_COLLECTION.
+DEFAULT_CHECKPOINTS_COLLECTION_NAME = "checkpoints"

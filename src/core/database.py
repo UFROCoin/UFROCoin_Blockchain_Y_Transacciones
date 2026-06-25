@@ -4,6 +4,10 @@ from importlib import import_module
 from typing import Any
 
 
+from src.core.constants import (
+    DEFAULT_CHECKPOINTS_COLLECTION_NAME,
+)
+
 DEFAULT_MONGO_URI = "mongodb://localhost:27017/"
 DEFAULT_DATABASE_NAME = "ufrocoin"
 DEFAULT_BLOCKS_COLLECTION_NAME = "blocks"
@@ -120,6 +124,10 @@ def get_chain_metadata_collection_name() -> str:
     return os.getenv("MONGO_CHAIN_METADATA_COLLECTION", DEFAULT_CHAIN_METADATA_COLLECTION_NAME)
 
 
+def get_checkpoints_collection_name() -> str:
+    return os.getenv("MONGO_CHECKPOINTS_COLLECTION", DEFAULT_CHECKPOINTS_COLLECTION_NAME)
+
+
 def get_blocks_collection() -> Any:
     return get_database()[get_blocks_collection_name()]
 
@@ -130,6 +138,10 @@ def get_transactions_collection() -> Any:
 
 def get_chain_metadata_collection() -> Any:
     return get_database()[get_chain_metadata_collection_name()]
+
+
+def get_checkpoints_collection() -> Any:
+    return get_database()[get_checkpoints_collection_name()]
 
 
 def initialize_database() -> None:
@@ -183,6 +195,25 @@ def initialize_database() -> None:
     transactions.create_index(
         [("timestamp", pymongo.DESCENDING)],
         name="transactions_timestamp_desc",
+    )
+
+    checkpoints = get_checkpoints_collection()
+
+    # Índice único para evitar checkpoints duplicados del mismo rango.
+    checkpoints.create_index(
+        [("from_block", pymongo.ASCENDING), ("to_block", pymongo.ASCENDING)],
+        unique=True,
+        name="checkpoints_range_unique",
+    )
+
+    checkpoints.create_index(
+        [("from_block", pymongo.ASCENDING)],
+        name="checkpoints_from_block",
+    )
+
+    checkpoints.create_index(
+        [("created_at", pymongo.DESCENDING)],
+        name="checkpoints_created_at_desc",
     )
 
 
