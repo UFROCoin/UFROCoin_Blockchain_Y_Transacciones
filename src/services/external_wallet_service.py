@@ -8,7 +8,7 @@ import httpx
 
 LOGGER = logging.getLogger(__name__)
 
-DEFAULT_WALLET_SERVICE_BASE_URL = "http://modulo1-usuario:8000/api"
+DEFAULT_WALLET_SERVICE_BASE_URL = "http://api-users:8001/api"
 DEFAULT_WALLET_TIMEOUT_SECONDS = 3.0
 WALLET_ADDRESS_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 
@@ -25,7 +25,11 @@ class ExternalWalletService:
             or os.getenv("WALLET_SERVICE_BASE_URL")
             or DEFAULT_WALLET_SERVICE_BASE_URL
         ).rstrip("/")
-        self.token = token if token is not None else os.getenv("WALLET_SERVICE_TOKEN")
+        self.token = (
+            token
+            if token is not None
+            else (os.getenv("WALLET_INTERNAL_TOKEN") or os.getenv("WALLET_SERVICE_TOKEN"))
+        )
         self.timeout_seconds = self._resolve_timeout(timeout_seconds)
 
     def check_wallet_exist(self, address: str) -> bool:
@@ -66,7 +70,9 @@ class ExternalWalletService:
             headers["Authorization"] = f"Bearer {self.token}"
 
         with httpx.Client(timeout=self.timeout_seconds) as client:
-            return client.get(f"{self.base_url}/wallet/{address}", headers=headers)
+            return client.get(
+                f"{self.base_url}/internal/wallet/{address}/exists", headers=headers
+            )
 
     @staticmethod
     def _is_valid_wallet_address(address: str) -> bool:
@@ -83,15 +89,13 @@ class ExternalWalletService:
         if not isinstance(body, dict):
             return False
 
-        if "success" in body:
-            data = body.get("data")
-            return (
-                body.get("success") is True
-                and isinstance(data, dict)
-                and data.get("address") == address
-            )
-
-        return body.get("address") == address
+        data = body.get("data")
+        return (
+            body.get("success") is True
+            and isinstance(data, dict)
+            and data.get("exists") is True
+            and data.get("address") == address
+        )
 
     @staticmethod
     def _resolve_timeout(timeout_seconds: float | None) -> float:

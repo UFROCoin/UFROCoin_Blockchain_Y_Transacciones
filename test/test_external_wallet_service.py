@@ -43,8 +43,8 @@ def test_valid_wallet_response_with_standard_wrapper_returns_true():
             200,
             {
                 "success": True,
-                "message": "Wallet consultada correctamente.",
-                "data": {"address": VALID_ADDRESS, "balance": 100.0},
+                "message": "Existencia de wallet consultada correctamente.",
+                "data": {"exists": True, "address": VALID_ADDRESS},
                 "error": {"code": "", "details": ""},
             },
         )
@@ -54,17 +54,32 @@ def test_valid_wallet_response_with_standard_wrapper_returns_true():
     service._get_wallet.assert_called_once_with(VALID_ADDRESS)
 
 
-def test_valid_wallet_response_without_wrapper_returns_true():
+def test_response_without_exists_flag_returns_false():
     service = ExternalWalletService()
     service._get_wallet = MagicMock(return_value=make_response(200, {"address": VALID_ADDRESS}))
 
-    assert service.check_wallet_exist(VALID_ADDRESS) is True
+    assert service.check_wallet_exist(VALID_ADDRESS) is False
+
+
+def test_exists_false_with_matching_address_returns_false():
+    service = ExternalWalletService()
+    service._get_wallet = MagicMock(
+        return_value=make_response(
+            200,
+            {"success": True, "data": {"exists": False, "address": VALID_ADDRESS}},
+        )
+    )
+
+    assert service.check_wallet_exist(VALID_ADDRESS) is False
 
 
 def test_success_response_for_different_address_returns_false():
     service = ExternalWalletService()
     service._get_wallet = MagicMock(
-        return_value=make_response(200, {"success": True, "data": {"address": OTHER_VALID_ADDRESS}})
+        return_value=make_response(
+            200,
+            {"success": True, "data": {"exists": True, "address": OTHER_VALID_ADDRESS}},
+        )
     )
 
     assert service.check_wallet_exist(VALID_ADDRESS) is False
@@ -149,7 +164,7 @@ def test_get_wallet_builds_expected_url_headers_and_timeout():
     assert result is response
     client_cls.assert_called_once_with(timeout=1.5)
     client.get.assert_called_once_with(
-        f"http://usuarios:8000/api/wallet/{VALID_ADDRESS}",
+        f"http://usuarios:8000/api/internal/wallet/{VALID_ADDRESS}/exists",
         headers={"Authorization": "Bearer internal-token"},
     )
 
@@ -168,12 +183,13 @@ def test_get_wallet_uses_empty_headers_without_token():
 
     assert result is response
     client.get.assert_called_once_with(
-        f"http://usuarios:8000/api/wallet/{VALID_ADDRESS}",
+        f"http://usuarios:8000/api/internal/wallet/{VALID_ADDRESS}/exists",
         headers={},
     )
 
 
 def test_env_configuration_is_used(monkeypatch):
+    monkeypatch.delenv("WALLET_INTERNAL_TOKEN", raising=False)
     monkeypatch.setenv("WALLET_SERVICE_BASE_URL", "http://wallets.local/api")
     monkeypatch.setenv("WALLET_SERVICE_TOKEN", "env-token")
     monkeypatch.setenv("WALLET_SERVICE_TIMEOUT_SECONDS", "2.5")
@@ -183,6 +199,15 @@ def test_env_configuration_is_used(monkeypatch):
     assert service.base_url == "http://wallets.local/api"
     assert service.token == "env-token"
     assert service.timeout_seconds == 2.5
+
+
+def test_internal_token_env_takes_precedence(monkeypatch):
+    monkeypatch.setenv("WALLET_INTERNAL_TOKEN", "internal-token")
+    monkeypatch.setenv("WALLET_SERVICE_TOKEN", "legacy-token")
+
+    service = ExternalWalletService()
+
+    assert service.token == "internal-token"
 
 
 def test_invalid_env_timeout_falls_back_to_default(monkeypatch):
