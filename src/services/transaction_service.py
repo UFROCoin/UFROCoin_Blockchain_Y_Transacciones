@@ -38,6 +38,13 @@ class TransactionService:
                 if tx_from == address:
                     balance -= tx.get("amount", 0.0)
 
+        # Créditos de emisión off-chain (wallet.credit.issued): confirmados pero no minados.
+        genesis_credits = self.transactions_collection.find(
+            {"to": address, "status": "CONFIRMED", "block_index": None}
+        )
+        for tx in genesis_credits:
+            balance += tx.get("amount", 0.0)
+
         pending_txs = self.transactions_collection.find({"from": address, "status": "PENDING"})
         for tx in pending_txs:
             balance -= tx.get("amount", 0.0)

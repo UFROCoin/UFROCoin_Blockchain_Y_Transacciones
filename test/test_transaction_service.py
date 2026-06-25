@@ -228,3 +228,32 @@ class TestCalculateBalance:
         result = mock_transaction_service.calculate_balance("REWARD_POOL")
 
         assert result == 1000000.0
+
+    def test_counts_offchain_genesis_credit(self, mock_transaction_service, mock_db_client):
+        """Un crédito wallet.credit.issued (CONFIRMED, block_index None) suma al saldo."""
+        wallet = "a1b2c3d4e5f678901234567890abcdef12345678"
+        mock_db_client["ufrocoin"].blocks.find.return_value = []
+        # find() se llama 1) para créditos off-chain, 2) para pendientes.
+        mock_db_client["ufrocoin"].transactions.find.side_effect = [
+            [{"to": wallet, "amount": 100.0, "status": "CONFIRMED", "block_index": None}],
+            [],
+        ]
+
+        result = mock_transaction_service.calculate_balance(wallet)
+
+        assert result == 100.0
+
+    def test_offchain_credit_minus_pending_transfer(
+        self, mock_transaction_service, mock_db_client
+    ):
+        """El crédito off-chain suma y la transferencia pendiente resta."""
+        wallet = "a1b2c3d4e5f678901234567890abcdef12345678"
+        mock_db_client["ufrocoin"].blocks.find.return_value = []
+        mock_db_client["ufrocoin"].transactions.find.side_effect = [
+            [{"to": wallet, "amount": 100.0, "status": "CONFIRMED", "block_index": None}],
+            [{"from": wallet, "amount": 30.0, "status": "PENDING"}],
+        ]
+
+        result = mock_transaction_service.calculate_balance(wallet)
+
+        assert result == 70.0

@@ -47,6 +47,19 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  worker:
+    build:
+      context: .
+    container_name: ufrocoin_worker
+    command: ["python", "-m", "src.workers.genesis_credit_consumer"]
+    env_file:
+      - .env
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
 volumes:
   mongodb_data:
   rabbitmq_data:
