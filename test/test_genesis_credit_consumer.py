@@ -1,5 +1,6 @@
+import asyncio
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from src.workers import genesis_credit_consumer as consumer
 
@@ -71,25 +72,23 @@ def test_ensure_indexes_creates_unique_sparse_index_on_credit_id():
     )
 
 
-def test_callback_acks_on_success():
+def test_handle_message_acks_on_success():
     transactions = MagicMock()
-    channel = MagicMock()
-    method = MagicMock(delivery_tag=7)
-    callback = consumer._build_callback(transactions)
+    message = AsyncMock()
+    message.body = json.dumps(CREDIT_EVENT).encode()
 
-    callback(channel, method, None, json.dumps(CREDIT_EVENT).encode())
+    asyncio.run(consumer._handle_message(transactions, message))
 
-    channel.basic_ack.assert_called_once_with(delivery_tag=7)
-    channel.basic_nack.assert_not_called()
+    message.ack.assert_awaited_once()
+    message.nack.assert_not_awaited()
 
 
-def test_callback_nacks_without_requeue_on_error():
+def test_handle_message_nacks_without_requeue_on_error():
     transactions = MagicMock()
-    channel = MagicMock()
-    method = MagicMock(delivery_tag=9)
-    callback = consumer._build_callback(transactions)
+    message = AsyncMock()
+    message.body = b"not-json"
 
-    callback(channel, method, None, b"not-json")
+    asyncio.run(consumer._handle_message(transactions, message))
 
-    channel.basic_ack.assert_not_called()
-    channel.basic_nack.assert_called_once_with(delivery_tag=9, requeue=False)
+    message.ack.assert_not_awaited()
+    message.nack.assert_awaited_once_with(requeue=False)
