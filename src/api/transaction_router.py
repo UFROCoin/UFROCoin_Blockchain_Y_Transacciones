@@ -21,7 +21,8 @@ def get_transaction_service():
 
 @router.post(
     "/", 
-    response_model=Transaction,
+    response_model=TransactionDetailResponse,
+    response_model_by_alias=True,
     status_code=status.HTTP_201_CREATED,
     summary="Crear una nueva transferencia",
     description=(
@@ -73,7 +74,19 @@ async def create_transaction(
 ):
     try:
         new_tx = service.create_transfer(transaction.model_dump(by_alias=True))
-        return new_tx
+        return {
+            "status": "ok",
+            "data": {
+                "id": new_tx["_id"],
+                "from": new_tx["from"],
+                "to": new_tx["to"],
+                "amount": new_tx["amount"],
+                "type": new_tx["type"],
+                "status": new_tx["status"],
+                "timestamp": new_tx["timestamp"],
+                "block_index": new_tx.get("block_index"),
+            },
+        }
     except ValueError as ve:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
