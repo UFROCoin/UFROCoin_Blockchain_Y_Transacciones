@@ -2,7 +2,12 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
+from bson import ObjectId
+
 from src.workers import block_mined_consumer as consumer
+
+
+TRANSACTION_ID = "683f1a2b3c4d5e6f7a8b9c0d"
 
 
 BLOCK = {
@@ -48,6 +53,42 @@ def test_process_block_mined_event_parses_envelope_and_persists():
 
     blocks.update_one.assert_called_once()
     assert blocks.update_one.call_args[0][0] == {"hash": "a" * 64}
+
+
+def test_confirm_block_transactions_marks_matching_transactions_confirmed():
+    transactions = MagicMock()
+    block = {
+        **BLOCK,
+        "transactions": [
+            {"transaction_id": TRANSACTION_ID, "amount": 10},
+            {"amount": 5},
+        ],
+    }
+
+    consumer.confirm_block_transactions(transactions, block)
+
+    transactions.update_one.assert_called_once_with(
+        {"_id": ObjectId(TRANSACTION_ID)},
+        {"$set": {"status": "CONFIRMED", "block_index": 1}},
+    )
+
+
+def test_process_block_mined_event_confirms_transactions_when_collection_is_provided():
+    blocks = MagicMock()
+    transactions = MagicMock()
+    block = {
+        **BLOCK,
+        "transactions": [{"transaction_id": TRANSACTION_ID, "amount": 10}],
+    }
+    event = {**BLOCK_MINED_EVENT, "data": block}
+
+    consumer.process_block_mined_event(blocks, json.dumps(event).encode(), transactions)
+
+    blocks.update_one.assert_called_once()
+    transactions.update_one.assert_called_once_with(
+        {"_id": ObjectId(TRANSACTION_ID)},
+        {"$set": {"status": "CONFIRMED", "block_index": 1}},
+    )
 
 
 def test_ensure_indexes_creates_unique_index_on_hash():

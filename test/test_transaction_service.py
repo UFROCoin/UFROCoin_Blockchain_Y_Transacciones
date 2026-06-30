@@ -257,3 +257,33 @@ class TestCalculateBalance:
         result = mock_transaction_service.calculate_balance(wallet)
 
         assert result == 70.0
+
+    def test_confirmed_transfer_without_pending_copy_is_subtracted_once(
+        self, mock_transaction_service, mock_db_client
+    ):
+        """Una transferencia ya confirmada no debe descontarse además como pendiente."""
+        wallet = "a1b2c3d4e5f678901234567890abcdef12345678"
+        mock_db_client["ufrocoin"].blocks.find.return_value = [
+            {
+                "transactions": [
+                    {
+                        "from": "SYSTEM",
+                        "to": wallet,
+                        "amount": 100.0,
+                        "type": "GENESIS",
+                    },
+                    {
+                        "id": "683f1a2b3c4d5e6f7a8b9c0d",
+                        "from": wallet,
+                        "to": "b1b2c3d4e5f678901234567890abcdef12345678",
+                        "amount": 30.0,
+                        "type": "TRANSFER",
+                    },
+                ]
+            }
+        ]
+        mock_db_client["ufrocoin"].transactions.find.side_effect = [[], []]
+
+        result = mock_transaction_service.calculate_balance(wallet)
+
+        assert result == 70.0

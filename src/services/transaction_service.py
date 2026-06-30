@@ -111,7 +111,7 @@ class TransactionService:
                 }
             )
         except Exception as exc:  # noqa: BLE001
-            LOGGER.warning("No se pudo publicar transaction.created: %s", exc)
+            LOGGER.error("No se pudo publicar transaction.created: %s", exc)
 
         return transaction_dict
 

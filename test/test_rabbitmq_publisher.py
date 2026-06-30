@@ -21,6 +21,12 @@ def reset_rabbitmq_globals():
 
 @pytest.fixture()
 def fake_pika(monkeypatch):
+    class AMQPError(Exception):
+        pass
+
+    class StreamLostError(AMQPError):
+        pass
+
     connection = MagicMock()
     connection.is_closed = False
     channel = MagicMock()
@@ -31,6 +37,10 @@ def fake_pika(monkeypatch):
     module.URLParameters = MagicMock(side_effect=lambda url: {"url": url})
     module.BlockingConnection = MagicMock(return_value=connection)
     module.BasicProperties = MagicMock(return_value={"content_type": "application/json"})
+    module.exceptions = SimpleNamespace(
+        AMQPError=AMQPError,
+        StreamLostError=StreamLostError,
+    )
 
     monkeypatch.setitem(sys.modules, "pika", module)
     return module, connection, channel
@@ -132,6 +142,44 @@ def test_publish_event_serializes_json_and_sets_persistent_properties(fake_pika)
     assert publish_kwargs["body"] == json.dumps(payload, sort_keys=True, ensure_ascii=True)
     assert json.loads(publish_kwargs["body"]) == payload
     assert publish_kwargs["properties"] == {"content_type": "application/json"}
+
+
+def test_publish_event_reconnects_and_retries_after_stream_lost(fake_pika):
+    pika, connection, channel = fake_pika
+    retry_connection = MagicMock()
+    retry_connection.is_closed = False
+    retry_channel = MagicMock()
+    retry_channel.is_closed = False
+    retry_connection.channel.return_value = retry_channel
+    pika.BlockingConnection.side_effect = [connection, retry_connection]
+    channel.basic_publish.side_effect = pika.exceptions.StreamLostError("lost")
+
+    rabbitmq_publisher.publish_event("transaction.created", {"id": "tx-1"})
+
+    assert pika.BlockingConnection.call_count == 2
+    channel.basic_publish.assert_called_once()
+    retry_channel.basic_publish.assert_called_once()
+    channel.close.assert_called_once()
+    connection.close.assert_called_once()
+
+
+def test_publish_event_raises_when_retry_also_fails(fake_pika):
+    pika, connection, channel = fake_pika
+    retry_connection = MagicMock()
+    retry_connection.is_closed = False
+    retry_channel = MagicMock()
+    retry_channel.is_closed = False
+    retry_connection.channel.return_value = retry_channel
+    pika.BlockingConnection.side_effect = [connection, retry_connection]
+    channel.basic_publish.side_effect = pika.exceptions.StreamLostError("lost")
+    retry_channel.basic_publish.side_effect = pika.exceptions.StreamLostError("lost again")
+
+    with pytest.raises(pika.exceptions.StreamLostError):
+        rabbitmq_publisher.publish_event("transaction.created", {"id": "tx-1"})
+
+    assert pika.BlockingConnection.call_count == 2
+    assert rabbitmq_publisher._connection is None
+    assert rabbitmq_publisher._channel is None
 
 
 def test_publish_event_continues_without_basic_properties_when_pika_import_fails(
