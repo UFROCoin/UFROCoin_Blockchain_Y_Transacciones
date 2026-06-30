@@ -11,7 +11,7 @@ def get_wallet_history(address: str, page: int = 1, limit: int = 10) -> list[dic
     
     query = {"$or": [{"from": address}, {"to": address}]}
     
-    pending_cursor = transactions_collection.find(query)
+    pending_cursor = transactions_collection.find({**query, "block_index": None})
     
     for tx in pending_cursor:
         tx["_id"] = str(tx["_id"])
