@@ -11,12 +11,14 @@ def get_wallet_history(address: str, page: int = 1, limit: int = 10) -> list[dic
     
     query = {"$or": [{"from": address}, {"to": address}]}
     
-    pending_cursor = transactions_collection.find(query)
+    pending_cursor = transactions_collection.find({**query, "block_index": None})
     
     for tx in pending_cursor:
         tx["_id"] = str(tx["_id"])
         if not tx.get("status"):
             tx["status"] = "PENDING"
+        if tx.get("type") == "TRANSFER":
+            tx["type"] = "SEND" if tx.get("from") == address else "RECEIVE"
         history.append(tx)
         
     blocks_cursor = blocks_collection.find({
@@ -35,6 +37,8 @@ def get_wallet_history(address: str, page: int = 1, limit: int = 10) -> list[dic
                 
                 tx["status"] = "CONFIRMED"
                 tx["block_index"] = block.get("index")
+                if tx.get("type") == "TRANSFER":
+                    tx["type"] = "SEND" if tx.get("from") == address else "RECEIVE"
                 history.append(tx)
                 
     history.sort(key=lambda item: item.get("timestamp", ""), reverse=True)

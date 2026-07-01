@@ -4,10 +4,10 @@ Tests de regresión para endpoints existentes.
 Documenta la sección 6 del TRANSACTION_DETAIL_HANDOFF.md:
 - GET /health debe seguir respondiendo {"status": "ok"}.
 - GET /api/transactions/pending debe seguir listando transacciones pendientes.
+- POST /api/transactions/ debe retornar la envoltura estándar {"status", "data"}.
 
-Nota: POST /api/transactions/ y GET /api/chain requieren mocks más complejos
-(ExternalWalletService, BlockService con DB real) y quedan fuera del alcance
-inmediato de este handoff. Se pueden agregar en una iteración futura.
+Nota: GET /api/chain requiere mocks más complejos (BlockService con DB real)
+y queda fuera del alcance inmediato de este handoff.
 """
 
 
@@ -75,6 +75,51 @@ class TestPendingTransactionsEndpoint:
 
         assert len(body["data"]) == 1
         assert body["data"][0]["id"] == "683f1a2b3c4d5e6f7a8b9c0d"
+
+
+# ---------------------------------------------------------------------------
+# POST /api/transactions/ — Crear transferencia
+# ---------------------------------------------------------------------------
+
+
+class TestCreateTransactionEndpoint:
+    """El endpoint de creación debe retornar el contrato estándar."""
+
+    def test_post_returns_wrapped_transaction_detail(
+        self, test_client, mock_transaction_service
+    ):
+        """POST /api/transactions/ debe retornar {status, data} con id."""
+        from_address = "a1b2c3d4e5f678901234567890abcdef12345678"
+        to_address = "b1c2d3e4f5a678901234567890abcdef12345678"
+
+        def create_transfer(payload):
+            assert payload["from"] == from_address
+            assert payload["to"] == to_address
+            return {
+                "_id": "683f1a2b3c4d5e6f7a8b9c0d",
+                "from": from_address,
+                "to": to_address,
+                "amount": 25.0,
+                "type": "TRANSFER",
+                "status": "PENDING",
+                "timestamp": "2026-06-29T12:00:00+00:00",
+                "block_index": None,
+            }
+
+        mock_transaction_service.create_transfer = create_transfer
+
+        response = test_client.post(
+            "/api/transactions/",
+            json={"from": from_address, "to": to_address, "amount": 25.0},
+        )
+        body = response.json()
+
+        assert response.status_code == 201
+        assert body["status"] == "ok"
+        assert body["data"]["id"] == "683f1a2b3c4d5e6f7a8b9c0d"
+        assert body["data"]["status"] == "PENDING"
+        assert body["data"]["from"] == from_address
+        assert body["data"]["to"] == to_address
 
 
 # ---------------------------------------------------------------------------

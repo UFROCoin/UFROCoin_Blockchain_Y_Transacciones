@@ -9,6 +9,12 @@ BLOCKCHAIN_EVENTS_EXCHANGE = "ufrocoin.blockchain.events"
 GENESIS_EVENT_ROUTING_KEY = "genesis.created"
 TRANSACTION_EVENT_ROUTING_KEY = "transaction.created"
 
+WALLET_CREDIT_ROUTING_KEY = "wallet.credit.issued"
+WALLET_CREDIT_QUEUE = "wallet_credit_queue"
+MINING_EVENTS_EXCHANGE = "ufrocoin.mining.events"
+BLOCK_MINED_ROUTING_KEY = "block.mined"
+BLOCK_MINED_QUEUE = "block_mined_queue"
+
 # ---------------------------------------------------------------------------
 # Checkpoints
 # ---------------------------------------------------------------------------
