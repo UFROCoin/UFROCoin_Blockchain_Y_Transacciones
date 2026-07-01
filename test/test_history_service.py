@@ -73,8 +73,18 @@ def test_wallet_history_excludes_block_anchored_transaction_copies(monkeypatch):
     }
     assert sum(1 for tx in history if tx.get("id") == mined_tx_id) == 1
     assert any(tx["type"] == "GENESIS" and tx["status"] == "CONFIRMED" for tx in history)
-    assert any(tx["type"] == "TRANSFER" and tx["status"] == "PENDING" for tx in history)
+    assert any(tx["type"] == "SEND" and tx["status"] == "PENDING" for tx in history)
 
     mined_tx = next(tx for tx in history if tx.get("id") == mined_tx_id)
     assert mined_tx["status"] == "CONFIRMED"
     assert mined_tx["block_index"] == 3
+    assert mined_tx["type"] == "SEND"
+
+    recipient_history = history_service.get_wallet_history(recipient)
+
+    assert any(
+        tx["type"] == "RECEIVE" and tx["status"] == "PENDING"
+        for tx in recipient_history
+    )
+    recipient_mined_tx = next(tx for tx in recipient_history if tx.get("id") == mined_tx_id)
+    assert recipient_mined_tx["type"] == "RECEIVE"
