@@ -51,7 +51,30 @@ class BlockValidationService:
             return False
 
         computed_hash = self._calculate_block_hash_from_dict(normalized_block_data)
-        return computed_hash == normalized_block_data["hash"].lower()
+        if computed_hash != normalized_block_data["hash"].lower():
+            return False
+
+        if self.db is not None and not self._is_next_expected_block(normalized_block_data):
+            return False
+
+        return True
+
+    def _is_next_expected_block(self, normalized_block_data: dict[str, Any]) -> bool:
+        blocks_collection = self.db["blocks"]
+        block_index = normalized_block_data["index"]
+
+        if blocks_collection.find_one({"index": block_index}, {"_id": 1}):
+            return False
+
+        last_block = blocks_collection.find_one(sort=[("index", -1)])
+        if last_block is None:
+            return self._is_genesis_block(normalized_block_data)
+
+        expected_index = last_block["index"] + 1
+        if block_index != expected_index:
+            return False
+
+        return normalized_block_data["previous_hash"].lower() == last_block["hash"].lower()
 
     def validate_chain_integrity(self) -> dict[str, Any]:
         """
