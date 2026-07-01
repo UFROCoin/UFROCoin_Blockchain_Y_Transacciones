@@ -12,6 +12,7 @@ import json
 import logging
 import os
 from functools import partial
+from importlib import import_module
 
 from bson import ObjectId
 
@@ -26,6 +27,25 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_RABBITMQ_URL = "amqp://guest:guest@localhost:5672/%2F"
 RECONNECT_DELAY_SECONDS = 5
+
+
+def _is_duplicate_key_error(exc: Exception) -> bool:
+    try:
+        pymongo_errors = import_module("pymongo.errors")
+    except ImportError:
+        return False
+    return isinstance(exc, pymongo_errors.DuplicateKeyError)
+
+
+def _block_index_from_body(body) -> int | None:
+    try:
+        event = json.loads(body)
+    except (TypeError, ValueError):
+        return None
+    data = event.get("data") if isinstance(event, dict) else None
+    if not isinstance(data, dict):
+        return None
+    return data.get("index")
 
 
 def persist_block(blocks_collection, block: dict) -> None:
@@ -94,6 +114,15 @@ async def _handle_message(blocks_collection, message, transactions_collection=No
         )
         await message.ack()
     except Exception as exc:  # noqa: BLE001
+        if _is_duplicate_key_error(exc):
+            LOGGER.warning(
+                "Bloque index=%s rechazado por colision de consenso: %s",
+                _block_index_from_body(message.body),
+                exc,
+            )
+            await message.ack()
+            return
+
         LOGGER.warning("No se pudo procesar block.mined: %s", exc)
         await message.nack(requeue=False)
 

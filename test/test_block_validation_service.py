@@ -195,6 +195,48 @@ class TestValidateBlockIntegrity:
         """Un dict vacío retorna False."""
         assert self.service.validate_block_integrity({}) is False
 
+    def test_valid_next_block_with_current_chain_state_returns_true(self):
+        """Un bloque con índice siguiente y previous_hash vigente pasa consenso."""
+        genesis = make_valid_genesis_block()
+        block = make_valid_non_genesis_block(previous_hash=genesis["hash"], index=1)
+        service = _make_service_for_submit_validation(last_block=genesis)
+
+        assert service.validate_block_integrity(block) is True
+
+    def test_duplicate_block_index_returns_false(self):
+        """Falla 11: un índice ya persistido debe rechazarse antes del consumer."""
+        last_block = make_valid_non_genesis_block(previous_hash="a" * 64, index=9)
+        block = make_valid_non_genesis_block(previous_hash=last_block["hash"], index=10)
+        service = _make_service_for_submit_validation(
+            last_block=last_block,
+            existing_indexes={10},
+        )
+
+        assert service.validate_block_integrity(block) is False
+
+    def test_skipped_block_index_returns_false(self):
+        """Un bloque que no es último + 1 no puede anexarse a la cadena."""
+        last_block = make_valid_non_genesis_block(previous_hash="a" * 64, index=9)
+        block = make_valid_non_genesis_block(previous_hash=last_block["hash"], index=11)
+        service = _make_service_for_submit_validation(last_block=last_block)
+
+        assert service.validate_block_integrity(block) is False
+
+    def test_stale_previous_hash_returns_false(self):
+        """Un bloque con índice correcto pero anclaje obsoleto debe rechazarse."""
+        last_block = make_valid_non_genesis_block(previous_hash="a" * 64, index=9)
+        block = make_valid_non_genesis_block(previous_hash="b" * 64, index=10)
+        service = _make_service_for_submit_validation(last_block=last_block)
+
+        assert service.validate_block_integrity(block) is False
+
+    def test_genesis_block_with_empty_chain_returns_true(self):
+        """El caso génesis sigue siendo válido si la cadena está vacía."""
+        block = make_valid_genesis_block()
+        service = _make_service_for_submit_validation(last_block=None)
+
+        assert service.validate_block_integrity(block) is True
+
 
 # ---------------------------------------------------------------------------
 # validate_chain_integrity
@@ -213,6 +255,30 @@ def _make_db_with_blocks(blocks: list[dict]) -> MagicMock:
     db.__getitem__.return_value.find.return_value.sort.return_value = cursor
 
     return db_client
+
+
+def _make_service_for_submit_validation(
+    last_block: dict | None,
+    existing_indexes: set[int] | None = None,
+) -> BlockValidationService:
+    """Construye un servicio con colección blocks fake para validar submits."""
+    existing_indexes = existing_indexes or set()
+    db_client = MagicMock()
+    db = MagicMock()
+    blocks_collection = MagicMock()
+
+    db_client.__getitem__.return_value = db
+    db.__getitem__.return_value = blocks_collection
+
+    def find_one(query=None, projection=None, **kwargs):
+        if "sort" in kwargs:
+            return last_block
+        if query and query.get("index") in existing_indexes:
+            return {"_id": "existing-block"}
+        return None
+
+    blocks_collection.find_one.side_effect = find_one
+    return BlockValidationService(db_client=db_client, db_name="ufrocoin")
 
 
 class TestValidateChainIntegrity:
