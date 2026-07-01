@@ -123,3 +123,21 @@ def test_handle_message_nacks_without_requeue_on_error():
 
     message.ack.assert_not_awaited()
     message.nack.assert_awaited_once_with(requeue=False)
+
+
+def test_handle_message_acks_duplicate_key_as_consensus_rejection(monkeypatch):
+    from pymongo.errors import DuplicateKeyError
+
+    blocks = MagicMock()
+    message = AsyncMock()
+    message.body = json.dumps(BLOCK_MINED_EVENT).encode()
+
+    def raise_duplicate_key(*_args, **_kwargs):
+        raise DuplicateKeyError("duplicate index", code=11000)
+
+    monkeypatch.setattr(consumer, "process_block_mined_event", raise_duplicate_key)
+
+    asyncio.run(consumer._handle_message(blocks, message))
+
+    message.ack.assert_awaited_once()
+    message.nack.assert_not_awaited()
